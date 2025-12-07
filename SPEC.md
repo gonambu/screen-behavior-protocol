@@ -1104,8 +1104,19 @@ actions:
   submit:
     steps:
       # === 状態更新 ===
+      # 単一の状態更新
       - set: $loading = true
       - set: $form.values.name = "新しい名前"
+
+      # 複数の状態を同時に更新（オブジェクト形式）
+      - set: { loading: false, error: null }
+
+      # 配列の更新（リテラル形式）
+      - set:
+          todos:
+            - id: uuid()
+              text: $newText
+            - ...$todos
 
       # === API呼び出し ===
       - call: api.createUser($form.values)
@@ -1746,6 +1757,7 @@ UIDPドキュメントの検証ルール。
 - スコープセクションを追加（UIDPが扱うもの・扱わないもの）
 - イベントハンドラのオプション（stop, prevent）を追加
 - 組み込み関数に uuid() を追加
+- set のオブジェクト形式・配列リテラル形式を追加
 
 ### v0.2
 
