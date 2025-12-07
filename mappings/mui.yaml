@@ -1,0 +1,520 @@
+# UIDP to MUI Component Mapping
+# プロトコルの抽象コンポーネントをMUIコンポーネントにマッピング
+
+uidp: "0.1"
+mapping:
+  target: "@mui/material"
+  version: "^5.0.0"
+
+# ====================
+# レイアウトコンポーネント
+# ====================
+layout:
+  Stack:
+    component: Stack
+    props:
+      direction:
+        vertical: column
+        horizontal: row
+      gap: spacing  # 数値をMUIのspacing単位に変換
+
+  Grid:
+    component: Grid
+    props:
+      columns: columns
+      gap: spacing
+
+  GridItem:
+    component: Grid
+    props:
+      span: xs  # span: 4 -> xs={4}
+
+  Flex:
+    component: Box
+    props:
+      display: flex
+      justify: justifyContent
+      align: alignItems
+
+  Container:
+    component: Container
+    props:
+      maxWidth: maxWidth
+
+  Card:
+    component: Card
+    children:
+      - when: title
+        then:
+          component: CardHeader
+          props:
+            title: title
+      - component: CardContent
+        children: children
+
+  Spacer:
+    component: Box
+    props:
+      flexGrow: 1
+
+# ====================
+# 入力コンポーネント
+# ====================
+inputs:
+  TextField:
+    component: TextField
+    props:
+      label: label
+      value: value
+      required: required
+      type: type
+      error: "!!error"
+      helperText: error
+      autoFocus: autoFocus
+      placeholder: placeholder
+      disabled: disabled
+    events:
+      change: onChange
+      blur: onBlur
+    bind:
+      value: value
+      onChange: "(e) => setValue(e.target.value)"
+
+  SearchField:
+    component: TextField
+    props:
+      placeholder: placeholder
+      value: value
+      size: small
+      InputProps:
+        startAdornment:
+          component: InputAdornment
+          props:
+            position: start
+          children:
+            component: SearchIcon
+    events:
+      change: onChange
+
+  Select:
+    component: FormControl
+    children:
+      - component: InputLabel
+        children: label
+      - component: Select
+        props:
+          value: value
+          label: label
+          required: required
+          disabled: disabled
+        children:
+          each: options
+          render:
+            component: MenuItem
+            props:
+              value: option.value
+            children: option.label
+    events:
+      change: onChange
+
+  Checkbox:
+    component: FormControlLabel
+    props:
+      label: label
+      disabled: disabled
+    children:
+      component: Checkbox
+      props:
+        checked: checked
+    events:
+      change: onChange
+
+  RadioGroup:
+    component: FormControl
+    children:
+      - when: label
+        then:
+          component: FormLabel
+          children: label
+      - component: RadioGroup
+        props:
+          value: value
+        children:
+          each: options
+          render:
+            component: FormControlLabel
+            props:
+              value: option.value
+              label: option.label
+            children:
+              component: Radio
+    events:
+      change: onChange
+
+  DatePicker:
+    component: DatePicker
+    import: "@mui/x-date-pickers"
+    props:
+      label: label
+      value: value
+      disabled: disabled
+    events:
+      change: onChange
+
+# ====================
+# ボタンコンポーネント
+# ====================
+buttons:
+  Button:
+    component: Button
+    props:
+      variant:
+        primary: contained
+        secondary: outlined
+        text: text
+        danger: contained
+      color:
+        primary: primary
+        secondary: secondary
+        danger: error
+      disabled: disabled
+      type: type
+      startIcon: icon  # アイコン名からMUIアイコンに変換
+    children: label
+    events:
+      click: onClick
+    # loadingの処理
+    when: loading
+    then:
+      component: LoadingButton
+      import: "@mui/lab"
+
+  IconButton:
+    component: IconButton
+    props:
+      size: size
+      disabled: disabled
+      color: color
+    children:
+      component: "${icon}Icon"  # icon: edit -> EditIcon
+    tooltip:
+      wrap:
+        component: Tooltip
+        props:
+          title: tooltip
+
+# ====================
+# データ表示コンポーネント
+# ====================
+data:
+  DataTable:
+    component: DataGrid
+    import: "@mui/x-data-grid"
+    props:
+      rows: data
+      columns: columns  # カラム定義の変換が必要
+      checkboxSelection: selectable
+      rowSelectionModel: selection
+      loading: loading
+      pageSizeOptions: "[10, 25, 50]"
+    events:
+      rowClick: onRowClick
+      selectionChange: onRowSelectionModelChange
+    # カラム変換ルール
+    columnMapping:
+      field: field
+      label: headerName
+      sortable: sortable
+      width: width
+      render: renderCell
+
+  DescriptionList:
+    # MUIにはないのでカスタム実装
+    component: Box
+    children:
+      each: items
+      render:
+        component: Box
+        props:
+          display: grid
+          gridTemplateColumns: "200px 1fr"
+          gap: 2
+          py: 1
+          borderBottom: "1px solid"
+          borderColor: divider
+        children:
+          - component: Typography
+            props:
+              variant: body2
+              color: text.secondary
+            children: item.label
+          - component: Typography
+            props:
+              variant: body1
+            children: item.value
+
+  Chip:
+    component: Chip
+    props:
+      label: label
+      color: color
+      size: size
+      variant: variant
+
+  StatusBadge:
+    component: Chip
+    props:
+      label: status
+      color:
+        switch: status
+        cases:
+          active: success
+          inactive: default
+          pending: warning
+          error: error
+      size: small
+
+# ====================
+# ナビゲーションコンポーネント
+# ====================
+navigation:
+  PageHeader:
+    # カスタムコンポーネントとして実装
+    component: Box
+    props:
+      mb: 3
+    children:
+      - when: breadcrumbs
+        then:
+          component: Breadcrumbs
+          props:
+            sx:
+              mb: 1
+          children:
+            each: breadcrumbs
+            render:
+              - when: item.to
+                then:
+                  component: Link
+                  props:
+                    component: RouterLink
+                    to: item.to
+                    color: inherit
+                  children: item.label
+                else:
+                  component: Typography
+                  props:
+                    color: text.primary
+                  children: item.label
+      - component: Box
+        props:
+          display: flex
+          justifyContent: space-between
+          alignItems: center
+        children:
+          - component: Typography
+            props:
+              variant: h4
+              component: h1
+            children: title
+          - when: actions
+            then:
+              component: Stack
+              props:
+                direction: row
+                spacing: 1
+              children: actions
+
+  Pagination:
+    component: Pagination
+    props:
+      page: page
+      count: totalPages
+      color: primary
+    events:
+      change: "onChange={(_, page) => onPageChange(page)}"
+
+  Breadcrumbs:
+    component: Breadcrumbs
+    children:
+      each: items
+      render:
+        component: Link
+        props:
+          href: item.to
+
+# ====================
+# フィードバックコンポーネント
+# ====================
+feedback:
+  Spinner:
+    component: CircularProgress
+    props:
+      size: size
+
+  TableSkeleton:
+    component: Skeleton
+    props:
+      variant: rectangular
+      height: "calc(52px * ${rows})"
+
+  FormSkeleton:
+    component: Stack
+    props:
+      spacing: 3
+    children:
+      - component: Skeleton
+        props:
+          variant: rectangular
+          height: 56
+      - component: Skeleton
+        props:
+          variant: rectangular
+          height: 56
+      - component: Skeleton
+        props:
+          variant: rectangular
+          height: 56
+
+  DetailSkeleton:
+    component: Skeleton
+    props:
+      variant: rectangular
+      height: 300
+
+  EmptyState:
+    component: Box
+    props:
+      textAlign: center
+      py: 8
+    children:
+      - component: Typography
+        props:
+          variant: body1
+          color: text.secondary
+        children: message
+
+# ====================
+# ダイアログコンポーネント
+# ====================
+dialogs:
+  confirm:
+    component: Dialog
+    props:
+      open: open
+    children:
+      - component: DialogTitle
+        children: title
+      - component: DialogContent
+        children:
+          component: DialogContentText
+          children: message
+      - component: DialogActions
+        children:
+          - component: Button
+            props:
+              onClick: onCancel
+            children: キャンセル
+          - component: Button
+            props:
+              onClick: onConfirm
+              color:
+                switch: confirmVariant
+                cases:
+                  danger: error
+                  primary: primary
+              variant: contained
+            children: confirmLabel
+
+  notify:
+    component: Snackbar
+    props:
+      open: open
+      autoHideDuration: 5000
+    children:
+      component: Alert
+      props:
+        severity:
+          switch: type
+          cases:
+            success: success
+            error: error
+            warning: warning
+            info: info
+      children: message
+
+# ====================
+# フォームコンポーネント
+# ====================
+forms:
+  Form:
+    component: Box
+    props:
+      component: form
+    events:
+      submit: "onSubmit={(e) => { e.preventDefault(); onSubmit(); }}"
+
+  FormActions:
+    component: Box
+    props:
+      display: flex
+      justifyContent: flex-end
+      gap: 2
+      mt: 3
+    children: children
+
+# ====================
+# アイコンマッピング
+# ====================
+icons:
+  add: AddIcon
+  edit: EditIcon
+  delete: DeleteIcon
+  search: SearchIcon
+  close: CloseIcon
+  check: CheckIcon
+  error: ErrorIcon
+  warning: WarningIcon
+  info: InfoIcon
+  menu: MenuIcon
+  more: MoreVertIcon
+  refresh: RefreshIcon
+  filter: FilterListIcon
+  sort: SortIcon
+  download: DownloadIcon
+  upload: UploadIcon
+  settings: SettingsIcon
+  person: PersonIcon
+  group: GroupIcon
+  home: HomeIcon
+  back: ArrowBackIcon
+  forward: ArrowForwardIcon
+  expand: ExpandMoreIcon
+  collapse: ExpandLessIcon
+
+# ====================
+# テーマカラーマッピング
+# ====================
+colors:
+  primary: primary
+  secondary: secondary
+  success: success
+  error: error
+  warning: warning
+  info: info
+  default: default
+  text: text.primary
+  textSecondary: text.secondary
+  divider: divider
+
+# ====================
+# バリアントマッピング
+# ====================
+variants:
+  button:
+    primary: contained
+    secondary: outlined
+    text: text
+  chip:
+    filled: filled
+    outlined: outlined

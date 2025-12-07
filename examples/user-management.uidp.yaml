@@ -1,0 +1,992 @@
+# ============================================================
+# User Management - UIDP v0.2 サンプル
+# ============================================================
+# ユーザー管理のCRUD画面群を定義するサンプル
+# このファイルは完全な画面定義の例として参照できる
+# ============================================================
+
+uidp: "0.2"
+
+meta:
+  name: ユーザー管理
+  description: ユーザーの一覧表示・作成・編集・削除を行う画面群
+  version: "1.0.0"
+
+# ============================================================
+# 型定義
+# ============================================================
+types:
+  User:
+    id: string
+    name: string
+    email: string
+    role: Role
+    status: UserStatus
+    createdAt: datetime
+    updatedAt: datetime
+
+  Role:
+    enum: [admin, member, viewer]
+    labels:
+      admin: 管理者
+      member: メンバー
+      viewer: 閲覧者
+
+  UserStatus:
+    enum: [active, inactive, pending]
+    labels:
+      active: 有効
+      inactive: 無効
+      pending: 保留中
+
+  UserForm:
+    name: string
+    email: string
+    role: Role
+
+  PaginatedUsers:
+    items: User[]
+    total: number
+    page: number
+    pageSize: number
+    totalPages: number
+
+# ============================================================
+# API定義
+# ============================================================
+api:
+  baseUrl: /api/v1
+
+  endpoints:
+    getUsers:
+      method: GET
+      path: /users
+      params:
+        page: number = 1
+        pageSize: number = 20
+        q: string?
+        sortBy: string?
+        sortOrder: enum[asc, desc]?
+      response: PaginatedUsers
+
+    getUser:
+      method: GET
+      path: /users/:id
+      response: User
+
+    createUser:
+      method: POST
+      path: /users
+      body: UserForm
+      response:
+        id: string
+
+    updateUser:
+      method: PUT
+      path: /users/:id
+      body: UserForm
+      response: User
+
+    deleteUser:
+      method: DELETE
+      path: /users/:id
+      response:
+        success: boolean
+
+    deleteUsers:
+      method: POST
+      path: /users/bulk-delete
+      body:
+        ids: string[]
+      response:
+        count: number
+
+    checkEmail:
+      method: POST
+      path: /users/check-email
+      body:
+        email: string
+        excludeId: string?
+      response:
+        available: boolean
+
+# ============================================================
+# 画面定義
+# ============================================================
+screens:
+  # ----------------------------------------------------------
+  # ユーザー一覧画面
+  # ----------------------------------------------------------
+  UserList:
+    title: ユーザー一覧
+    description: |
+      ユーザーの一覧を表示する画面。
+      - 検索・ソート・ページネーション
+      - 一括選択・一括削除
+      - 各行から詳細・編集・削除
+
+    route: /users
+
+    params:
+      page:
+        type: number
+        default: 1
+      q:
+        type: string
+        default: ""
+      sortBy:
+        type: string
+        default: "createdAt"
+      sortOrder:
+        type: enum[asc, desc]
+        default: "desc"
+
+    state:
+      users:
+        type: PaginatedUsers
+        source: api.getUsers
+        params:
+          page: $params.page
+          q: $params.q
+          sortBy: $params.sortBy
+          sortOrder: $params.sortOrder
+        fetchOn: [mount, paramsChange]
+        staleTime: 1m
+
+      loading:
+        type: boolean
+        initial: true
+
+      selectedIds:
+        type: string[]
+        initial: []
+
+    computed:
+      hasSelection:
+        type: boolean
+        expr: $selectedIds.length > 0
+
+      canBulkDelete:
+        type: boolean
+        expr: $hasSelection && $currentUser.role == "admin"
+
+      isEmpty:
+        type: boolean
+        expr: $users.items.length == 0 && !$loading
+
+    layout:
+      # ページヘッダー
+      - PageHeader:
+          title: $title
+          actions:
+            - Button:
+                label: 新規作成
+                icon: add
+                variant: primary
+                on:click: navigate(UserCreate)
+
+      # メインカード
+      - Card:
+          children:
+            # ツールバー
+            - Toolbar:
+                left:
+                  - SearchField:
+                      value: $params.q
+                      placeholder: 名前またはメールで検索
+                      on:submit: navigate(UserList, {
+                        q: $value,
+                        page: 1,
+                        sortBy: $params.sortBy,
+                        sortOrder: $params.sortOrder
+                      })
+
+                right:
+                  - when: $hasSelection
+                    then:
+                      - Text:
+                          content: "${$selectedIds.length}件選択中"
+                          color: secondary
+                      - Button:
+                          label: 一括削除
+                          variant: danger
+                          disabled: not($canBulkDelete)
+                          on:click: actions.bulkDelete
+
+            # データ表示部分
+            - switch: true
+              cases:
+                $loading:
+                  - TableSkeleton:
+                      rows: 10
+                      columns: 6
+
+                $isEmpty && $params.q:
+                  - EmptyState:
+                      icon: search
+                      title: 検索結果がありません
+                      description: "「${$params.q}」に一致するユーザーは見つかりませんでした"
+                      action:
+                        label: 検索をクリア
+                        on:click: navigate(UserList, { q: "", page: 1 })
+
+                $isEmpty:
+                  - EmptyState:
+                      icon: people
+                      title: ユーザーがいません
+                      description: 新規作成ボタンからユーザーを追加してください
+                      action:
+                        label: 新規作成
+                        variant: primary
+                        on:click: navigate(UserCreate)
+
+              default:
+                - DataTable:
+                    data: $users.items
+                    selectable: true
+                    selection: $selectedIds
+                    on:selectionChange: set($selectedIds, $value)
+                    on:rowClick: navigate(UserDetail, { id: $row.id })
+                    sortBy: $params.sortBy
+                    sortOrder: $params.sortOrder
+                    on:sort: navigate(UserList, {
+                      page: 1,
+                      q: $params.q,
+                      sortBy: $event.field,
+                      sortOrder: $event.order
+                    })
+                    columns:
+                      - field: name
+                        header: 名前
+                        sortable: true
+                        width: 200
+
+                      - field: email
+                        header: メールアドレス
+                        sortable: true
+
+                      - field: role
+                        header: 権限
+                        width: 120
+                        cell:
+                          - RoleChip:
+                              value: $cell
+
+                      - field: status
+                        header: ステータス
+                        width: 100
+                        cell:
+                          - StatusBadge:
+                              value: $cell
+
+                      - field: createdAt
+                        header: 作成日
+                        sortable: true
+                        width: 150
+                        cell:
+                          - DateTime:
+                              value: $cell
+                              format: YYYY/MM/DD HH:mm
+
+                      - field: _actions
+                        header: ""
+                        width: 100
+                        cell:
+                          - Stack:
+                              direction: horizontal
+                              gap: 4
+                              children:
+                                - IconButton:
+                                    icon: edit
+                                    tooltip: 編集
+                                    size: small
+                                    on:click:
+                                      stop: true  # 行クリックを防止
+                                      action: navigate(UserEdit, { id: $row.id })
+
+                                - IconButton:
+                                    icon: delete
+                                    tooltip: 削除
+                                    size: small
+                                    color: error
+                                    on:click:
+                                      stop: true
+                                      action: actions.deleteOne($row.id, $row.name)
+
+            # ページネーション
+            - when: $users.totalPages > 1
+              then:
+                - Box:
+                    padding: $tokens.spacing.md
+                    display: flex
+                    justifyContent: center
+                    children:
+                      - Pagination:
+                          page: $users.page
+                          totalPages: $users.totalPages
+                          on:change: navigate(UserList, {
+                            page: $value,
+                            q: $params.q,
+                            sortBy: $params.sortBy,
+                            sortOrder: $params.sortOrder
+                          })
+
+    actions:
+      deleteOne:
+        params:
+          id: string
+          name: string
+        confirm:
+          title: ユーザーを削除
+          message: "「${$name}」を削除しますか？この操作は取り消せません。"
+          confirmLabel: 削除
+          cancelLabel: キャンセル
+          variant: danger
+        steps:
+          - call: api.deleteUser($id)
+          - on:success:
+              - toast: success("ユーザーを削除しました")
+              - refetch: $users
+          - on:error:
+              - toast: error("削除に失敗しました: ${$error.message}")
+
+      bulkDelete:
+        confirm:
+          title: 一括削除
+          message: "選択した${$selectedIds.length}件のユーザーを削除しますか？この操作は取り消せません。"
+          confirmLabel: 削除
+          cancelLabel: キャンセル
+          variant: danger
+        steps:
+          - call: api.deleteUsers($selectedIds)
+          - on:success:
+              - toast: success("${$result.count}件のユーザーを削除しました")
+              - set: $selectedIds = []
+              - refetch: $users
+          - on:error:
+              - toast: error("削除に失敗しました: ${$error.message}")
+
+  # ----------------------------------------------------------
+  # ユーザー詳細画面
+  # ----------------------------------------------------------
+  UserDetail:
+    title: ユーザー詳細
+    description: ユーザーの詳細情報を表示する画面
+
+    route: /users/:id
+
+    params:
+      id:
+        type: string
+        required: true
+
+    state:
+      user:
+        type: User
+        source: api.getUser
+        params:
+          id: $params.id
+        fetchOn: [mount]
+
+      loading:
+        type: boolean
+        initial: true
+
+    computed:
+      canEdit:
+        type: boolean
+        expr: $currentUser.role == "admin" || $currentUser.id == $params.id
+
+      canDelete:
+        type: boolean
+        expr: $currentUser.role == "admin" && $currentUser.id != $params.id
+
+    layout:
+      - PageHeader:
+          title: $user.name ?? "ユーザー詳細"
+          breadcrumbs:
+            - label: ユーザー一覧
+              to: UserList
+            - label: $user.name ?? "詳細"
+          actions:
+            - when: $canEdit
+              then:
+                - Button:
+                    label: 編集
+                    icon: edit
+                    variant: secondary
+                    on:click: navigate(UserEdit, { id: $params.id })
+
+            - when: $canDelete
+              then:
+                - Button:
+                    label: 削除
+                    icon: delete
+                    variant: danger
+                    on:click: actions.delete
+
+      - switch: $loading
+        loading:
+          - Grid:
+              columns: 12
+              gap: 24
+              children:
+                - GridItem:
+                    span: 8
+                    children:
+                      - Skeleton:
+                          variant: rectangular
+                          height: 300
+                - GridItem:
+                    span: 4
+                    children:
+                      - Skeleton:
+                          variant: rectangular
+                          height: 200
+
+        default:
+          - Grid:
+              columns: 12
+              gap: 24
+              children:
+                # 左カラム: 基本情報
+                - GridItem:
+                    span: 8
+                    children:
+                      - Card:
+                          title: 基本情報
+                          children:
+                            - DescriptionList:
+                                items:
+                                  - label: ID
+                                    value: $user.id
+
+                                  - label: 名前
+                                    value: $user.name
+
+                                  - label: メールアドレス
+                                    value:
+                                      - Link:
+                                          href: "mailto:${$user.email}"
+                                          children: $user.email
+
+                                  - label: 権限
+                                    value:
+                                      - RoleChip:
+                                          value: $user.role
+
+                                  - label: ステータス
+                                    value:
+                                      - StatusBadge:
+                                          value: $user.status
+
+                                  - label: 作成日時
+                                    value:
+                                      - DateTime:
+                                          value: $user.createdAt
+                                          format: YYYY/MM/DD HH:mm:ss
+
+                                  - label: 更新日時
+                                    value:
+                                      - DateTime:
+                                          value: $user.updatedAt
+                                          format: YYYY/MM/DD HH:mm:ss
+
+                # 右カラム: アクティビティ
+                - GridItem:
+                    span: 4
+                    children:
+                      - Card:
+                          title: 最近のアクティビティ
+                          children:
+                            - ActivityTimeline:
+                                userId: $params.id
+                                limit: 5
+
+    actions:
+      delete:
+        confirm:
+          title: ユーザーを削除
+          message: "「${$user.name}」を削除しますか？この操作は取り消せません。"
+          confirmLabel: 削除
+          cancelLabel: キャンセル
+          variant: danger
+        steps:
+          - call: api.deleteUser($params.id)
+          - on:success:
+              - toast: success("ユーザーを削除しました")
+              - navigate: UserList
+          - on:error:
+              - toast: error("削除に失敗しました: ${$error.message}")
+
+  # ----------------------------------------------------------
+  # ユーザー作成画面
+  # ----------------------------------------------------------
+  UserCreate:
+    title: ユーザー作成
+    description: 新しいユーザーを作成する画面
+
+    route: /users/new
+
+    state:
+      form:
+        type: form<UserForm>
+        initial:
+          name: ""
+          email: ""
+          role: member
+
+        validation:
+          name:
+            - rule: required
+              message: 名前は必須です
+            - rule: maxLength(100)
+              message: 100文字以内で入力してください
+
+          email:
+            - rule: required
+              message: メールアドレスは必須です
+            - rule: email
+              message: 有効なメールアドレスを入力してください
+            - rule: async(api.checkEmail)
+              message: このメールアドレスは既に登録されています
+              debounce: 500ms
+
+          role:
+            - rule: required
+              message: 権限を選択してください
+
+      submitting:
+        type: boolean
+        initial: false
+
+    layout:
+      - PageHeader:
+          title: ユーザー作成
+          breadcrumbs:
+            - label: ユーザー一覧
+              to: UserList
+            - label: 新規作成
+
+      - Card:
+          maxWidth: 600
+          children:
+            - Form:
+                on:submit: actions.submit
+                children:
+                  - Stack:
+                      direction: vertical
+                      gap: 24
+                      children:
+                        - TextField:
+                            label: 名前
+                            required: true
+                            placeholder: 山田 太郎
+                            bind: $form.values.name
+                            error: $form.errors.name
+                            touched: $form.touched.name
+                            autoFocus: true
+
+                        - TextField:
+                            label: メールアドレス
+                            required: true
+                            type: email
+                            placeholder: taro.yamada@example.com
+                            bind: $form.values.email
+                            error: $form.errors.email
+                            touched: $form.touched.email
+
+                        - Select:
+                            label: 権限
+                            required: true
+                            bind: $form.values.role
+                            error: $form.errors.role
+                            options:
+                              - value: admin
+                                label: 管理者
+                                description: 全ての操作が可能
+                              - value: member
+                                label: メンバー
+                                description: 自分の情報の編集が可能
+                              - value: viewer
+                                label: 閲覧者
+                                description: 閲覧のみ可能
+
+                        - Divider
+
+                        - Stack:
+                            direction: horizontal
+                            justify: end
+                            gap: 12
+                            children:
+                              - Button:
+                                  label: キャンセル
+                                  variant: text
+                                  on:click: navigate(UserList)
+
+                              - Button:
+                                  label: 作成
+                                  variant: primary
+                                  type: submit
+                                  loading: $submitting
+                                  disabled: not($form.valid) || $submitting
+
+    actions:
+      submit:
+        steps:
+          - validate: $form
+          - if: not($form.valid)
+            then:
+              - return
+
+          - set: $submitting = true
+          - call: api.createUser($form.values)
+          - set: $submitting = false
+
+          - on:success:
+              - toast: success("ユーザーを作成しました")
+              - navigate: UserDetail
+                params:
+                  id: $result.id
+
+          - on:error:
+              - toast: error("作成に失敗しました: ${$error.message}")
+
+  # ----------------------------------------------------------
+  # ユーザー編集画面
+  # ----------------------------------------------------------
+  UserEdit:
+    title: ユーザー編集
+    description: ユーザー情報を編集する画面
+
+    route: /users/:id/edit
+
+    params:
+      id:
+        type: string
+        required: true
+
+    state:
+      user:
+        type: User
+        source: api.getUser
+        params:
+          id: $params.id
+        fetchOn: [mount]
+
+      loading:
+        type: boolean
+        initial: true
+
+      form:
+        type: form<UserForm>
+        initialFrom: $user  # userのロード後に初期化
+        fields: [name, email, role]
+
+        validation:
+          name:
+            - rule: required
+              message: 名前は必須です
+            - rule: maxLength(100)
+              message: 100文字以内で入力してください
+
+          email:
+            - rule: required
+              message: メールアドレスは必須です
+            - rule: email
+              message: 有効なメールアドレスを入力してください
+            - rule: async(api.checkEmail, { excludeId: $params.id })
+              message: このメールアドレスは既に登録されています
+              debounce: 500ms
+
+          role:
+            - rule: required
+              message: 権限を選択してください
+
+      submitting:
+        type: boolean
+        initial: false
+
+    computed:
+      hasChanges:
+        type: boolean
+        expr: $form.dirty
+
+    layout:
+      - PageHeader:
+          title: ユーザー編集
+          breadcrumbs:
+            - label: ユーザー一覧
+              to: UserList
+            - label: $user.name ?? "ユーザー"
+              to: UserDetail
+              params:
+                id: $params.id
+            - label: 編集
+
+      - switch: $loading
+        loading:
+          - Card:
+              maxWidth: 600
+              children:
+                - Stack:
+                    gap: 24
+                    children:
+                      - Skeleton:
+                          height: 56
+                      - Skeleton:
+                          height: 56
+                      - Skeleton:
+                          height: 56
+
+        default:
+          - Card:
+              maxWidth: 600
+              children:
+                - Form:
+                    on:submit: actions.submit
+                    children:
+                      - Stack:
+                          direction: vertical
+                          gap: 24
+                          children:
+                            - TextField:
+                                label: 名前
+                                required: true
+                                bind: $form.values.name
+                                error: $form.errors.name
+                                touched: $form.touched.name
+
+                            - TextField:
+                                label: メールアドレス
+                                required: true
+                                type: email
+                                bind: $form.values.email
+                                error: $form.errors.email
+                                touched: $form.touched.email
+
+                            - Select:
+                                label: 権限
+                                required: true
+                                bind: $form.values.role
+                                error: $form.errors.role
+                                options:
+                                  - value: admin
+                                    label: 管理者
+                                  - value: member
+                                    label: メンバー
+                                  - value: viewer
+                                    label: 閲覧者
+
+                            - Divider
+
+                            - Stack:
+                                direction: horizontal
+                                justify: end
+                                gap: 12
+                                children:
+                                  - Button:
+                                      label: キャンセル
+                                      variant: text
+                                      on:click: actions.cancel
+
+                                  - Button:
+                                      label: 保存
+                                      variant: primary
+                                      type: submit
+                                      loading: $submitting
+                                      disabled: not($form.valid) || not($hasChanges) || $submitting
+
+    actions:
+      submit:
+        steps:
+          - validate: $form
+          - if: not($form.valid)
+            then:
+              - return
+
+          - set: $submitting = true
+          - call: api.updateUser($params.id, $form.values)
+          - set: $submitting = false
+
+          - on:success:
+              - toast: success("ユーザーを更新しました")
+              - navigate: UserDetail
+                params:
+                  id: $params.id
+
+          - on:error:
+              - toast: error("更新に失敗しました: ${$error.message}")
+
+      cancel:
+        steps:
+          - if: $hasChanges
+            then:
+              - confirm:
+                  title: 編集を破棄
+                  message: 変更内容が保存されていません。編集を破棄しますか？
+                  confirmLabel: 破棄
+                  cancelLabel: 編集を続ける
+                  variant: warning
+              - navigate: UserDetail
+                params:
+                  id: $params.id
+            else:
+              - navigate: UserDetail
+                params:
+                  id: $params.id
+
+# ============================================================
+# 画面遷移定義
+# ============================================================
+flows:
+  UserManagement:
+    description: ユーザー管理画面群の遷移フロー
+
+    initial: UserList
+
+    screens:
+      - UserList
+      - UserDetail
+      - UserCreate
+      - UserEdit
+
+    transitions:
+      # 一覧 → 詳細
+      - from: UserList
+        to: UserDetail
+        on: selectUser
+        params:
+          id: $event.id
+
+      # 一覧 → 作成
+      - from: UserList
+        to: UserCreate
+        on: clickCreate
+
+      # 作成 → 詳細（成功時）
+      - from: UserCreate
+        to: UserDetail
+        on: createSuccess
+        params:
+          id: $result.id
+
+      # 作成 → 一覧（キャンセル）
+      - from: UserCreate
+        to: UserList
+        on: cancel
+
+      # 詳細 → 編集
+      - from: UserDetail
+        to: UserEdit
+        on: clickEdit
+        params:
+          id: $params.id
+
+      # 詳細 → 一覧（削除後）
+      - from: UserDetail
+        to: UserList
+        on: deleteSuccess
+
+      # 詳細 → 一覧（戻る）
+      - from: UserDetail
+        to: UserList
+        on: back
+
+      # 編集 → 詳細（保存/キャンセル）
+      - from: UserEdit
+        to: UserDetail
+        on: [saveSuccess, cancel]
+        params:
+          id: $params.id
+
+    guards:
+      # 編集画面へのアクセス権限
+      - transition: "* -> UserEdit"
+        when: $currentUser.role == "admin" || $currentUser.id == $params.id
+        otherwise:
+          - toast: error("このユーザーを編集する権限がありません")
+          - navigate: UserList
+
+# ============================================================
+# カスタムコンポーネント定義
+# ============================================================
+components:
+  RoleChip:
+    description: 権限を表示するチップ
+    props:
+      value:
+        type: Role
+        required: true
+    render:
+      - Chip:
+          label:
+            switch: $props.value
+            cases:
+              admin: 管理者
+              member: メンバー
+              viewer: 閲覧者
+          color:
+            switch: $props.value
+            cases:
+              admin: error
+              member: primary
+              viewer: default
+          size: small
+
+  StatusBadge:
+    description: ステータスを表示するバッジ
+    props:
+      value:
+        type: UserStatus
+        required: true
+    render:
+      - Chip:
+          label:
+            switch: $props.value
+            cases:
+              active: 有効
+              inactive: 無効
+              pending: 保留中
+          color:
+            switch: $props.value
+            cases:
+              active: success
+              inactive: default
+              pending: warning
+          size: small
+          variant: outlined
+
+  ActivityTimeline:
+    description: ユーザーのアクティビティタイムライン
+    props:
+      userId:
+        type: string
+        required: true
+      limit:
+        type: number
+        default: 5
+    state:
+      activities:
+        type: Activity[]
+        source: api:/users/${$props.userId}/activities
+        params:
+          limit: $props.limit
+    render:
+      - when: $activities.length == 0
+        then:
+          - Text:
+              content: アクティビティはありません
+              color: secondary
+        else:
+          - Timeline:
+              children:
+                - each: $activities
+                  as: activity
+                  render:
+                    - TimelineItem:
+                        title: $activity.action
+                        time:
+                          - DateTime:
+                              value: $activity.timestamp
+                              format: relative  # "3時間前" など
