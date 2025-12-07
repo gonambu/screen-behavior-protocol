@@ -1,4 +1,4 @@
-# UI Description Protocol (UIDP) v0.2
+# UI Description Protocol (UIDP) v0.2.1
 
 **UI画面の構造・状態・遷移を記述するための設計ドキュメント形式**
 
@@ -108,7 +108,7 @@ screens:
 ## ドキュメント構造
 
 ```yaml
-uidp: "0.2"                      # プロトコルバージョン（必須）
+uidp: "0.2.1"                    # プロトコルバージョン（必須）
 
 meta:                            # メタデータ
   name: "アプリケーション名"
@@ -126,6 +126,15 @@ tokens:                          # デザイントークン（W3C DTCG互換）
 
 types:                           # 型定義
   User: { ... }
+
+globals:                         # グローバル状態（アプリ全体で共有）
+  currentUser: { ... }
+
+subscriptions:                   # リアルタイムイベント購読（任意）
+  - event: ...
+
+api:                             # API定義
+  endpoints: { ... }
 
 components:                      # 再利用可能コンポーネント
   SearchBar: { ... }
@@ -147,11 +156,14 @@ flows:                           # 画面遷移定義
 | **Component** | 再利用可能なUI部品 | `Button`, `DataTable` |
 | **Layout** | コンポーネントの配置構造（ツリー） | `[Header, Content, Footer]` |
 | **State** | 画面またはコンポーネントが持つ状態 | `loading`, `users`, `form` |
+| **Globals** | アプリ全体で共有されるグローバル状態 | `currentUser`, `theme` |
 | **Action** | ユーザー操作に対する振る舞いの手続き | `submit`, `delete` |
 | **Flow** | 画面間の遷移グラフ | `UserList → UserDetail` |
+| **Subscription** | リアルタイムイベントの購読 | WebSocket, Server-Sent Events |
 | **Binding** | 状態とUIの双方向接続 | `bind: $form.name` |
 | **Reference** | 状態や値への参照 | `$users`, `$form.valid` |
 | **Token** | デザインの基本値（色、間隔など） | `$colors.primary` |
+| **Persist** | 状態の永続化先 | `localStorage`, `sessionStorage` |
 
 ---
 
@@ -285,7 +297,166 @@ layout:
 
 ---
 
-## 3. Screen（画面）
+## 3. Globals（グローバル状態）
+
+アプリケーション全体で共有される状態を定義する。
+
+```yaml
+globals:
+  # === 認証ユーザー ===
+  currentUser:
+    type: User
+    source: api:/me
+    # 未認証時はnull
+
+  # === アプリ設定 ===
+  theme:
+    type: enum[light, dark, system]
+    initial: system
+    persist: localStorage           # ブラウザに永続化
+
+  # === ワークスペース（Slackのような複数テナント）===
+  currentWorkspace:
+    type: Workspace
+    persist: localStorage
+
+  # === 機能フラグ ===
+  features:
+    type: object
+    source: api:/features
+    schema:
+      darkMode: boolean
+      betaFeatures: boolean
+
+  # === 通知設定 ===
+  notifications:
+    type: Notification[]
+    initial: []
+```
+
+### グローバル状態の参照
+
+```yaml
+# どの画面からでも参照可能
+layout:
+  - when: $currentUser.role == "admin"
+    then: AdminPanel
+
+  - UserAvatar:
+      user: $currentUser
+
+# 条件付きレンダリング
+  - when: $features.darkMode
+    then: DarkModeToggle
+```
+
+### 永続化オプション（persist）
+
+| 値 | 説明 |
+|----|------|
+| `localStorage` | ブラウザのローカルストレージに永続化 |
+| `sessionStorage` | セッションストレージに永続化（タブを閉じると消える） |
+| `cookie` | Cookieに永続化 |
+| `url` | URLパラメータと同期 |
+
+```yaml
+globals:
+  # ブラウザを閉じても維持
+  theme:
+    type: string
+    persist: localStorage
+
+  # タブを閉じると消える
+  tempData:
+    type: object
+    persist: sessionStorage
+
+  # URLと同期（共有可能）
+  viewMode:
+    type: enum[list, grid]
+    persist: url
+    urlParam: view              # ?view=grid
+```
+
+---
+
+## 4. Subscriptions（リアルタイム購読）
+
+WebSocket、Server-Sent Events などのリアルタイムイベントを購読する。
+
+```yaml
+# === 画面またはコンポーネントでの定義 ===
+screens:
+  ChannelView:
+    subscriptions:
+      # メッセージ受信
+      - event: newMessage
+        filter: $event.channelId == $props.channelId
+        action: actions.onNewMessage($event)
+
+      # タイピング通知
+      - event: typing
+        filter: $event.channelId == $props.channelId
+        action: actions.onTyping($event)
+
+      # ユーザーステータス変更
+      - event: userStatus
+        action: actions.updateUserStatus($event)
+```
+
+### Subscription 定義
+
+| プロパティ | 説明 | 必須 |
+|-----------|------|------|
+| `event` | 購読するイベント名 | ✓ |
+| `filter` | イベントを受け取る条件（式） | |
+| `action` | イベント受信時に実行するアクション | ✓ |
+
+### イベント受信時のアクション
+
+```yaml
+actions:
+  onNewMessage:
+    params:
+      event: MessageEvent
+    steps:
+      # メッセージをリストに追加
+      - set: $messages = [...$messages, $event.message]
+      # スクロール位置を調整
+      - effect: scrollToBottom($messageList)
+
+  onTyping:
+    params:
+      event: TypingEvent
+    steps:
+      # タイピング中ユーザーを追加
+      - set: $typingUsers = addToSet($typingUsers, $event.user)
+      # 3秒後に削除
+      - delay: 3000ms
+      - set: $typingUsers = removeFromSet($typingUsers, $event.user)
+```
+
+### グローバルなサブスクリプション
+
+```yaml
+# アプリ全体で購読するイベント
+globals:
+  notifications:
+    type: Notification[]
+    initial: []
+
+# ルートレベルでの定義
+subscriptions:
+  - event: notification
+    action: globals.addNotification($event)
+
+  - event: sessionExpired
+    action: navigate(Login)
+```
+
+---
+
+## 5. Screen（画面）
 
 ルーティング可能な独立した画面単位。
 
@@ -463,9 +634,101 @@ screens:
               - toast: error($error.message)
 ```
 
+### 埋め込みScreen（コンポーネントとしての画面）
+
+`route` を持たない Screen は、他の画面内に埋め込んで使用できる。
+Component との違いは、独自の state やライフサイクルを持つ点。
+
+```yaml
+screens:
+  # === 埋め込みScreen（routeなし）===
+  ChannelView:
+    description: チャンネルのメッセージ一覧と入力欄
+
+    # props を受け取る（routeの代わり）
+    props:
+      channelId:
+        type: string
+        required: true
+
+    # 親に対してイベントを発火
+    events:
+      - openThread
+      - openChannelInfo
+
+    # 独自の状態を持つ
+    state:
+      channel:
+        type: Channel
+        source: api.getChannel
+        params:
+          channelId: $props.channelId
+        fetchOn: [mount, propsChange]   # propsが変わったら再取得
+      messages:
+        type: Message[]
+        source: api.getMessages
+        params:
+          channelId: $props.channelId
+      loading:
+        type: boolean
+        initial: true
+
+    # リアルタイム購読
+    subscriptions:
+      - event: newMessage
+        filter: $event.channelId == $props.channelId
+        action: actions.onNewMessage($event)
+
+    layout:
+      - Flex:
+          direction: column
+          height: 100%
+          children:
+            - MessageList:
+                messages: $messages
+                on:replyClick: emit(openThread, $value)
+            - MessageInput:
+                on:submit: actions.sendMessage
+
+    actions:
+      sendMessage:
+        steps:
+          - call: api.postMessage($props.channelId, $value)
+
+  # === 通常のScreen（routeあり）===
+  Workspace:
+    route: /workspace/:workspaceId
+    layout:
+      - Flex:
+          direction: horizontal
+          children:
+            # 埋め込みScreenの使用
+            - ChannelView:
+                channelId: $selectedChannelId
+                on:openThread: actions.openThread($value)
+                on:openChannelInfo: set($showChannelInfo, true)
+
+            # 条件付きで表示
+            - when: $activeThread
+              then:
+                - ThreadPanel:
+                    threadId: $activeThread.id
+                    on:close: set($activeThread, null)
+```
+
+### Screen vs Component
+
+| 特性 | Screen (routeなし) | Component |
+|-----|-------------------|-----------|
+| 状態 | 独自の `state` を持てる | 親から props で受け取る |
+| API取得 | `source: api` で自動取得 | 親で取得して渡す |
+| ライフサイクル | マウント/アンマウント | 親に依存 |
+| 購読 | `subscriptions` を持てる | 持てない |
+| 用途 | 独立した機能単位 | 再利用可能なUI部品 |
+
 ---
 
-## 4. State（状態）
+## 6. State（状態）
 
 ### 状態の種類
 
@@ -563,7 +826,7 @@ $form.submitting      # 送信中フラグ
 
 ---
 
-## 5. Layout（レイアウト）
+## 7. Layout（レイアウト）
 
 ### コンポーネントツリーの記法
 
@@ -714,7 +977,7 @@ layout:
 
 ---
 
-## 6. Actions（アクション）
+## 8. Actions（アクション）
 
 ### 基本構文
 
@@ -814,7 +1077,7 @@ actions:
 
 ---
 
-## 7. Flow（画面遷移）
+## 9. Flow（画面遷移）
 
 画面間の遷移を状態機械として定義する。
 
@@ -908,7 +1171,7 @@ flows:
 
 ---
 
-## 8. Expression（式）
+## 10. Expression（式）
 
 ### 参照構文
 
@@ -1054,7 +1317,7 @@ debug($value)                 # コンソール出力（開発用）
 
 ---
 
-## 9. Component（コンポーネント）
+## 11. Component（コンポーネント）
 
 再利用可能なUI部品の定義。
 
@@ -1176,7 +1439,7 @@ components:
 
 ---
 
-## 10. API（外部連携）
+## 12. API（外部連携）
 
 ```yaml
 api:
@@ -1376,7 +1639,15 @@ UIDPドキュメントの検証ルール。
 
 ## 変更履歴
 
-### v0.2 (現在)
+### v0.2.1 (現在)
+
+- Globals セクションを追加（アプリ全体の共有状態）
+- Subscriptions セクションを追加（リアルタイムイベント購読）
+- 埋め込みScreen（props付きScreen）のドキュメント追加
+- 永続化オプション（persist）の追加
+- 用語集に Globals, Subscription, Persist を追加
+
+### v0.2
 
 - 設計原則に「AI-Parseable」を追加
 - 用語集を追加
