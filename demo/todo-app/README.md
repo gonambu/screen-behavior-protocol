@@ -8,8 +8,7 @@ UIDPファイルからReact + MUIアプリを生成するデモ。
 demo/todo-app/
 ├── README.md                 # このファイル
 ├── simple-todo.uidp.yaml     # UIDP仕様ファイル（2画面構成）
-├── comparison.md             # UIDP有無の比較（画面図示あり）
-└── prompt.md                 # AIへのプロンプト例
+└── comparison.md             # UIDP有無の比較（画面図示あり）
 ```
 
 ## 画面遷移
