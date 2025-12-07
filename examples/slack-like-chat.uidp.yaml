@@ -1,0 +1,1255 @@
+# ============================================================
+# Slack-like Chat Application - UIDP v0.2 サンプル
+# ============================================================
+# SlackライクなチャットアプリケーションのUI定義
+#
+# 含まれる機能:
+# - ワークスペース切り替え
+# - チャンネル/DM一覧
+# - メッセージ表示・送信
+# - スレッド表示
+# - リアクション
+# - チャンネル作成
+# ============================================================
+
+uidp: "0.2"
+
+meta:
+  name: Slack-like Chat
+  description: |
+    Slackライクなチャットアプリケーション。
+    リアルタイムメッセージング、チャンネル管理、スレッド機能を含む。
+  version: "1.0.0"
+
+# ============================================================
+# 型定義
+# ============================================================
+types:
+  Workspace:
+    id: string
+    name: string
+    icon: string
+    unreadCount: number
+
+  Channel:
+    id: string
+    name: string
+    description: string?
+    isPrivate: boolean
+    unreadCount: number
+    lastMessage: Message?
+    members: User[]
+    createdAt: datetime
+
+  DirectMessage:
+    id: string
+    user: User
+    unreadCount: number
+    lastMessage: Message?
+
+  User:
+    id: string
+    name: string
+    displayName: string
+    avatar: string
+    status: UserStatus
+    statusMessage: string?
+
+  UserStatus:
+    enum: [online, away, dnd, offline]
+    labels:
+      online: オンライン
+      away: 離席中
+      dnd: 取り込み中
+      offline: オフライン
+
+  Message:
+    id: string
+    channelId: string
+    user: User
+    content: string
+    timestamp: datetime
+    edited: boolean
+    reactions: Reaction[]
+    threadId: string?
+    replyCount: number
+    attachments: Attachment[]
+
+  Reaction:
+    emoji: string
+    count: number
+    users: User[]
+    includesMe: boolean
+
+  Attachment:
+    id: string
+    type: enum[image, file, link]
+    name: string
+    url: string
+    thumbnailUrl: string?
+    size: number?
+
+  Thread:
+    id: string
+    parentMessage: Message
+    replies: Message[]
+    participantCount: number
+
+  ChannelForm:
+    name: string
+    description: string
+    isPrivate: boolean
+
+# ============================================================
+# API定義
+# ============================================================
+api:
+  baseUrl: /api/v1
+
+  # WebSocket接続も定義
+  realtime:
+    url: wss://api.example.com/ws
+    events:
+      - newMessage
+      - messageUpdated
+      - messageDeleted
+      - userStatusChanged
+      - typing
+
+  endpoints:
+    # ワークスペース
+    getWorkspaces:
+      method: GET
+      path: /workspaces
+      response: Workspace[]
+
+    # チャンネル
+    getChannels:
+      method: GET
+      path: /workspaces/:workspaceId/channels
+      response: Channel[]
+
+    getChannel:
+      method: GET
+      path: /channels/:channelId
+      response: Channel
+
+    createChannel:
+      method: POST
+      path: /workspaces/:workspaceId/channels
+      body: ChannelForm
+      response: Channel
+
+    # DM
+    getDirectMessages:
+      method: GET
+      path: /workspaces/:workspaceId/dms
+      response: DirectMessage[]
+
+    # メッセージ
+    getMessages:
+      method: GET
+      path: /channels/:channelId/messages
+      params:
+        before: string?      # カーソルベースページネーション
+        limit: number = 50
+      response:
+        messages: Message[]
+        hasMore: boolean
+        nextCursor: string?
+
+    sendMessage:
+      method: POST
+      path: /channels/:channelId/messages
+      body:
+        content: string
+        threadId: string?
+        attachments: string[]?
+      response: Message
+
+    updateMessage:
+      method: PUT
+      path: /messages/:messageId
+      body:
+        content: string
+      response: Message
+
+    deleteMessage:
+      method: DELETE
+      path: /messages/:messageId
+
+    # リアクション
+    addReaction:
+      method: POST
+      path: /messages/:messageId/reactions
+      body:
+        emoji: string
+      response: Reaction
+
+    removeReaction:
+      method: DELETE
+      path: /messages/:messageId/reactions/:emoji
+
+    # スレッド
+    getThread:
+      method: GET
+      path: /threads/:threadId
+      response: Thread
+
+    # ユーザー
+    searchUsers:
+      method: GET
+      path: /users/search
+      params:
+        q: string
+      response: User[]
+
+# ============================================================
+# グローバル状態
+# ============================================================
+globals:
+  currentUser:
+    type: User
+    source: api:/me
+
+  currentWorkspace:
+    type: Workspace
+    persist: localStorage
+
+# ============================================================
+# メイン画面（シェル）
+# ============================================================
+screens:
+  Main:
+    title: Slack
+    description: メインのチャット画面。3カラムレイアウト。
+
+    route: /
+
+    state:
+      # ワークスペース
+      workspaces:
+        type: Workspace[]
+        source: api.getWorkspaces
+        fetchOn: [mount]
+
+      # チャンネル・DM
+      channels:
+        type: Channel[]
+        source: api.getChannels
+        params:
+          workspaceId: $currentWorkspace.id
+        fetchOn: [mount, workspaceChange]
+
+      directMessages:
+        type: DirectMessage[]
+        source: api.getDirectMessages
+        params:
+          workspaceId: $currentWorkspace.id
+        fetchOn: [mount, workspaceChange]
+
+      # UI状態
+      activeChannelId:
+        type: string?
+        initial: null
+        sync: url                # URLと同期
+
+      activeThreadId:
+        type: string?
+        initial: null
+
+      sidebarCollapsed:
+        type: boolean
+        initial: false
+        persist: localStorage
+
+      showCreateChannelModal:
+        type: boolean
+        initial: false
+
+    computed:
+      activeChannel:
+        type: Channel?
+        expr: $channels.find(c => c.id == $activeChannelId)
+
+      sortedChannels:
+        type: Channel[]
+        expr: |
+          $channels
+            .filter(c => !c.isPrivate)
+            .sort((a, b) => a.name.localeCompare(b.name))
+
+      privateChannels:
+        type: Channel[]
+        expr: |
+          $channels
+            .filter(c => c.isPrivate)
+            .sort((a, b) => a.name.localeCompare(b.name))
+
+      totalUnread:
+        type: number
+        expr: |
+          $channels.reduce((sum, c) => sum + c.unreadCount, 0) +
+          $directMessages.reduce((sum, dm) => sum + dm.unreadCount, 0)
+
+    layout:
+      - Flex:
+          direction: row
+          height: 100vh
+          children:
+            # ワークスペースバー（左端）
+            - WorkspaceBar:
+                workspaces: $workspaces
+                current: $currentWorkspace
+                on:select: actions.switchWorkspace($value)
+
+            # サイドバー
+            - when: not($sidebarCollapsed)
+              then:
+                - Sidebar:
+                    width: 260
+                    children:
+                      # ワークスペース名
+                      - SidebarHeader:
+                          title: $currentWorkspace.name
+                          on:menuClick: actions.openWorkspaceMenu
+
+                      # 検索
+                      - SearchButton:
+                          placeholder: "${$currentWorkspace.name} を検索"
+                          on:click: navigate(Search)
+
+                      # チャンネルセクション
+                      - SidebarSection:
+                          title: チャンネル
+                          collapsible: true
+                          action:
+                            icon: add
+                            tooltip: チャンネルを作成
+                            on:click: set($showCreateChannelModal, true)
+                          children:
+                            - each: $sortedChannels
+                              as: channel
+                              render:
+                                - ChannelItem:
+                                    channel: $channel
+                                    active: $channel.id == $activeChannelId
+                                    on:click: actions.selectChannel($channel.id)
+
+                      # プライベートチャンネル
+                      - when: $privateChannels.length > 0
+                        then:
+                          - SidebarSection:
+                              title: プライベートチャンネル
+                              collapsible: true
+                              children:
+                                - each: $privateChannels
+                                  as: channel
+                                  render:
+                                    - ChannelItem:
+                                        channel: $channel
+                                        active: $channel.id == $activeChannelId
+                                        on:click: actions.selectChannel($channel.id)
+
+                      # ダイレクトメッセージ
+                      - SidebarSection:
+                          title: ダイレクトメッセージ
+                          collapsible: true
+                          action:
+                            icon: add
+                            tooltip: メッセージを作成
+                            on:click: navigate(NewDM)
+                          children:
+                            - each: $directMessages
+                              as: dm
+                              render:
+                                - DMItem:
+                                    dm: $dm
+                                    active: $dm.id == $activeChannelId
+                                    on:click: actions.selectChannel($dm.id)
+
+            # メインコンテンツ
+            - Flex:
+                direction: column
+                flex: 1
+                children:
+                  - switch: $activeChannelId
+                    null:
+                      - WelcomeScreen:
+                          workspace: $currentWorkspace
+                    default:
+                      - ChannelView:
+                          channelId: $activeChannelId
+                          on:openThread: set($activeThreadId, $value)
+
+            # スレッドパネル（右側）
+            - when: $activeThreadId
+              then:
+                - ThreadPanel:
+                    threadId: $activeThreadId
+                    width: 400
+                    on:close: set($activeThreadId, null)
+
+      # モーダル: チャンネル作成
+      - when: $showCreateChannelModal
+        then:
+          - CreateChannelModal:
+              on:close: set($showCreateChannelModal, false)
+              on:created: actions.onChannelCreated($value)
+
+    actions:
+      switchWorkspace:
+        params:
+          workspaceId: string
+        steps:
+          - set: $currentWorkspace = $workspaces.find(w => w.id == $workspaceId)
+          - set: $activeChannelId = null
+          - set: $activeThreadId = null
+          - refetch: $channels
+          - refetch: $directMessages
+
+      selectChannel:
+        params:
+          channelId: string
+        steps:
+          - set: $activeChannelId = $channelId
+          - set: $activeThreadId = null
+
+      onChannelCreated:
+        params:
+          channel: Channel
+        steps:
+          - refetch: $channels
+          - set: $activeChannelId = $channel.id
+          - set: $showCreateChannelModal = false
+          - toast: success("チャンネル #${$channel.name} を作成しました")
+
+# ============================================================
+# チャンネルビュー（メッセージ一覧）
+# ============================================================
+  ChannelView:
+    description: チャンネルのメッセージ一覧と入力欄
+
+    # 埋め込みコンポーネントとして使用（routeなし）
+    props:
+      channelId:
+        type: string
+        required: true
+
+    events:
+      - openThread
+
+    state:
+      channel:
+        type: Channel
+        source: api.getChannel
+        params:
+          channelId: $props.channelId
+        fetchOn: [mount, propsChange]
+
+      messages:
+        type: Message[]
+        initial: []
+
+      hasMore:
+        type: boolean
+        initial: true
+
+      loading:
+        type: boolean
+        initial: true
+
+      loadingMore:
+        type: boolean
+        initial: false
+
+      # 入力状態
+      inputValue:
+        type: string
+        initial: ""
+
+      typingUsers:
+        type: User[]
+        initial: []
+
+      # 編集中のメッセージ
+      editingMessageId:
+        type: string?
+        initial: null
+
+    # リアルタイム購読
+    subscriptions:
+      - event: newMessage
+        filter: $event.channelId == $props.channelId
+        action: actions.onNewMessage($event)
+
+      - event: typing
+        filter: $event.channelId == $props.channelId
+        action: actions.onTyping($event)
+
+    layout:
+      - Flex:
+          direction: column
+          height: 100%
+          children:
+            # ヘッダー
+            - ChannelHeader:
+                channel: $channel
+                on:infoClick: emit(openChannelInfo, $channel.id)
+
+            # メッセージ一覧
+            - MessageList:
+                flex: 1
+                messages: $messages
+                loading: $loading
+                hasMore: $hasMore
+                loadingMore: $loadingMore
+                on:loadMore: actions.loadMore
+                on:replyClick: emit(openThread, $value)
+                on:reactionClick: actions.toggleReaction($messageId, $emoji)
+                on:editClick: set($editingMessageId, $value)
+                on:deleteClick: actions.deleteMessage($value)
+                editingMessageId: $editingMessageId
+                on:editSave: actions.saveEdit($messageId, $content)
+                on:editCancel: set($editingMessageId, null)
+
+            # タイピングインジケーター
+            - when: $typingUsers.length > 0
+              then:
+                - TypingIndicator:
+                    users: $typingUsers
+
+            # メッセージ入力
+            - MessageInput:
+                value: $inputValue
+                placeholder: "#${$channel.name} へのメッセージ"
+                on:change: actions.onInputChange($value)
+                on:submit: actions.sendMessage
+                on:attachFile: actions.attachFile
+
+    actions:
+      loadMore:
+        steps:
+          - if: not($hasMore) || $loadingMore
+            then:
+              - return
+          - set: $loadingMore = true
+          - call: api.getMessages($props.channelId, {
+              before: first($messages)?.id,
+              limit: 50
+            })
+          - set: $messages = [...$result.messages, ...$messages]
+          - set: $hasMore = $result.hasMore
+          - set: $loadingMore = false
+
+      sendMessage:
+        steps:
+          - if: isEmpty(trim($inputValue))
+            then:
+              - return
+          - call: api.sendMessage($props.channelId, {
+              content: $inputValue
+            })
+          - set: $inputValue = ""
+          # 楽観的更新: メッセージはWebSocketで受信
+
+      onNewMessage:
+        params:
+          message: Message
+        steps:
+          - set: $messages = [...$messages, $message]
+          # 自動スクロール（最下部にいる場合）
+
+      onInputChange:
+        params:
+          value: string
+        steps:
+          - set: $inputValue = $value
+          # タイピングイベント送信（デバウンス）
+          - debounce: 500ms
+            action:
+              - call: api.sendTyping($props.channelId)
+
+      onTyping:
+        params:
+          event: object
+        steps:
+          - if: $event.userId != $currentUser.id
+            then:
+              - set: $typingUsers = unique([...$typingUsers, $event.user])
+              # 3秒後に削除
+              - delay: 3000ms
+              - set: $typingUsers = $typingUsers.filter(u => u.id != $event.userId)
+
+      toggleReaction:
+        params:
+          messageId: string
+          emoji: string
+        steps:
+          - call: api.toggleReaction($messageId, $emoji)
+          # 楽観的更新
+
+      deleteMessage:
+        params:
+          messageId: string
+        confirm:
+          title: メッセージを削除
+          message: このメッセージを削除しますか？
+          variant: danger
+        steps:
+          - call: api.deleteMessage($messageId)
+          - set: $messages = $messages.filter(m => m.id != $messageId)
+
+      saveEdit:
+        params:
+          messageId: string
+          content: string
+        steps:
+          - call: api.updateMessage($messageId, { content: $content })
+          - set: $messages = $messages.map(m =>
+              m.id == $messageId ? { ...m, content: $content, edited: true } : m
+            )
+          - set: $editingMessageId = null
+
+# ============================================================
+# スレッドパネル
+# ============================================================
+  ThreadPanel:
+    description: スレッドの返信一覧と入力欄
+
+    props:
+      threadId:
+        type: string
+        required: true
+      width:
+        type: number
+        default: 400
+
+    events:
+      - close
+
+    state:
+      thread:
+        type: Thread
+        source: api.getThread
+        params:
+          threadId: $props.threadId
+        fetchOn: [mount, propsChange]
+
+      loading:
+        type: boolean
+        initial: true
+
+      inputValue:
+        type: string
+        initial: ""
+
+    subscriptions:
+      - event: newMessage
+        filter: $event.threadId == $props.threadId
+        action: actions.onNewReply($event)
+
+    layout:
+      - Box:
+          width: $props.width
+          height: 100%
+          borderLeft: 1px solid $tokens.colors.divider
+          children:
+            - Flex:
+                direction: column
+                height: 100%
+                children:
+                  # ヘッダー
+                  - ThreadHeader:
+                      title: スレッド
+                      subtitle: "#${$thread.parentMessage.channelId}"
+                      on:close: emit(close)
+
+                  # 親メッセージ
+                  - Box:
+                      padding: $tokens.spacing.md
+                      borderBottom: 1px solid $tokens.colors.divider
+                      children:
+                        - MessageItem:
+                            message: $thread.parentMessage
+                            showActions: false
+
+                  # 返信数
+                  - Box:
+                      padding: $tokens.spacing.sm
+                      children:
+                        - Text:
+                            content: "${$thread.replies.length}件の返信"
+                            variant: caption
+                            color: secondary
+
+                  # 返信一覧
+                  - MessageList:
+                      flex: 1
+                      messages: $thread.replies
+                      loading: $loading
+                      compact: true
+
+                  # 返信入力
+                  - MessageInput:
+                      value: $inputValue
+                      placeholder: 返信する...
+                      compact: true
+                      on:change: set($inputValue, $value)
+                      on:submit: actions.sendReply
+
+    actions:
+      sendReply:
+        steps:
+          - if: isEmpty(trim($inputValue))
+            then:
+              - return
+          - call: api.sendMessage($thread.parentMessage.channelId, {
+              content: $inputValue,
+              threadId: $props.threadId
+            })
+          - set: $inputValue = ""
+
+      onNewReply:
+        params:
+          message: Message
+        steps:
+          - set: $thread.replies = [...$thread.replies, $message]
+
+# ============================================================
+# チャンネル作成モーダル
+# ============================================================
+  CreateChannelModal:
+    description: 新しいチャンネルを作成するモーダル
+
+    events:
+      - close
+      - created
+
+    state:
+      form:
+        type: form<ChannelForm>
+        initial:
+          name: ""
+          description: ""
+          isPrivate: false
+
+        validation:
+          name:
+            - rule: required
+              message: チャンネル名は必須です
+            - rule: pattern(^[a-z0-9-_]+$)
+              message: 小文字、数字、ハイフン、アンダースコアのみ使用できます
+            - rule: maxLength(80)
+              message: 80文字以内で入力してください
+
+          description:
+            - rule: maxLength(250)
+              message: 250文字以内で入力してください
+
+      submitting:
+        type: boolean
+        initial: false
+
+    layout:
+      - Modal:
+          title: チャンネルを作成
+          width: 520
+          on:close: emit(close)
+          children:
+            - Form:
+                on:submit: actions.submit
+                children:
+                  - Stack:
+                      gap: 20
+                      children:
+                        # 公開/非公開切り替え
+                        - RadioGroup:
+                            value: $form.values.isPrivate
+                            on:change: set($form.values.isPrivate, $value)
+                            options:
+                              - value: false
+                                label: パブリック
+                                description: ワークスペースの全員が参加・閲覧できます
+                                icon: hash
+                              - value: true
+                                label: プライベート
+                                description: 招待されたメンバーのみ参加できます
+                                icon: lock
+
+                        # チャンネル名
+                        - TextField:
+                            label: チャンネル名
+                            required: true
+                            prefix: "#"
+                            placeholder: 例: marketing-campaign"
+                            bind: $form.values.name
+                            error: $form.errors.name
+                            helperText: |
+                              小文字、数字、ハイフン、アンダースコアが使用できます
+
+                        # 説明
+                        - TextField:
+                            label: 説明（任意）
+                            multiline: true
+                            rows: 3
+                            placeholder: このチャンネルは何についてのものですか？
+                            bind: $form.values.description
+                            error: $form.errors.description
+
+          footer:
+            - Stack:
+                direction: horizontal
+                justify: end
+                gap: 12
+                children:
+                  - Button:
+                      label: キャンセル
+                      variant: text
+                      on:click: emit(close)
+
+                  - Button:
+                      label: 作成
+                      variant: primary
+                      type: submit
+                      loading: $submitting
+                      disabled: not($form.valid) || $submitting
+
+    actions:
+      submit:
+        steps:
+          - validate: $form
+          - if: not($form.valid)
+            then:
+              - return
+
+          - set: $submitting = true
+          - call: api.createChannel($currentWorkspace.id, $form.values)
+          - set: $submitting = false
+
+          - on:success:
+              - emit: created($result)
+          - on:error:
+              - toast: error("チャンネルの作成に失敗しました: ${$error.message}")
+
+# ============================================================
+# 検索画面
+# ============================================================
+  Search:
+    title: 検索
+    description: メッセージ、チャンネル、ユーザーを検索
+
+    route: /search
+
+    params:
+      q:
+        type: string
+        default: ""
+      type:
+        type: enum[all, messages, channels, users]
+        default: "all"
+
+    state:
+      query:
+        type: string
+        initial: $params.q
+
+      results:
+        type: object
+        source: api.search
+        params:
+          q: $params.q
+          type: $params.type
+        fetchOn: [paramsChange]
+        skipIf: isEmpty($params.q)
+
+      loading:
+        type: boolean
+        initial: false
+
+    layout:
+      - Flex:
+          direction: column
+          height: 100%
+          children:
+            # 検索ヘッダー
+            - Box:
+                padding: $tokens.spacing.md
+                borderBottom: 1px solid $tokens.colors.divider
+                children:
+                  - SearchInput:
+                      value: $query
+                      placeholder: メッセージ、ファイル、チャンネルなどを検索
+                      autoFocus: true
+                      on:change: set($query, $value)
+                      on:submit: navigate(Search, { q: $query, type: $params.type })
+
+            # フィルタータブ
+            - Tabs:
+                value: $params.type
+                on:change: navigate(Search, { q: $params.q, type: $value })
+                items:
+                  - value: all
+                    label: すべて
+                  - value: messages
+                    label: メッセージ
+                  - value: channels
+                    label: チャンネル
+                  - value: users
+                    label: ユーザー
+
+            # 検索結果
+            - Box:
+                flex: 1
+                overflow: auto
+                children:
+                  - switch: true
+                    cases:
+                      isEmpty($params.q):
+                        - SearchTips
+
+                      $loading:
+                        - SearchSkeleton
+
+                      isEmpty($results):
+                        - EmptyState:
+                            icon: search
+                            title: 結果が見つかりません
+                            description: "「${$params.q}」に一致する結果はありませんでした"
+
+                    default:
+                      - SearchResults:
+                          results: $results
+                          query: $params.q
+                          on:messageClick: navigate(Main, {
+                            channelId: $value.channelId,
+                            messageId: $value.id
+                          })
+                          on:channelClick: navigate(Main, { channelId: $value.id })
+                          on:userClick: navigate(Profile, { userId: $value.id })
+
+# ============================================================
+# 画面遷移定義
+# ============================================================
+flows:
+  Chat:
+    description: チャットアプリケーションの画面遷移
+
+    initial: Main
+
+    screens:
+      - Main
+      - Search
+      - Profile
+      - Settings
+
+    transitions:
+      # チャンネル選択
+      - from: Main
+        to: Main
+        on: selectChannel
+        params:
+          channelId: $event.channelId
+
+      # 検索
+      - from: Main
+        to: Search
+        on: openSearch
+
+      - from: Search
+        to: Main
+        on: selectResult
+
+      # プロフィール
+      - from: "*"
+        to: Profile
+        on: openProfile
+        type: modal
+
+      # 設定
+      - from: Main
+        to: Settings
+        on: openSettings
+
+# ============================================================
+# カスタムコンポーネント定義
+# ============================================================
+components:
+  WorkspaceBar:
+    description: ワークスペース切り替えバー
+    props:
+      workspaces:
+        type: Workspace[]
+        required: true
+      current:
+        type: Workspace
+        required: true
+    events:
+      - select
+    render:
+      - Box:
+          width: 70
+          background: $tokens.colors.surface.dark
+          padding: $tokens.spacing.sm
+          children:
+            - Stack:
+                direction: vertical
+                align: center
+                gap: 8
+                children:
+                  - each: $props.workspaces
+                    as: ws
+                    render:
+                      - WorkspaceIcon:
+                          workspace: $ws
+                          active: $ws.id == $props.current.id
+                          on:click: emit(select, $ws.id)
+
+  ChannelItem:
+    description: チャンネル一覧のアイテム
+    props:
+      channel:
+        type: Channel
+        required: true
+      active:
+        type: boolean
+        default: false
+    render:
+      - ListItem:
+          active: $props.active
+          children:
+            - Stack:
+                direction: horizontal
+                align: center
+                gap: 8
+                children:
+                  - Icon:
+                      name: $props.channel.isPrivate ? "lock" : "hash"
+                      size: 18
+                      color: secondary
+                  - Text:
+                      content: $props.channel.name
+                      weight: $props.channel.unreadCount > 0 ? "bold" : "normal"
+                  - Spacer
+                  - when: $props.channel.unreadCount > 0
+                    then:
+                      - Badge:
+                          value: $props.channel.unreadCount
+                          color: error
+
+  DMItem:
+    description: DM一覧のアイテム
+    props:
+      dm:
+        type: DirectMessage
+        required: true
+      active:
+        type: boolean
+        default: false
+    render:
+      - ListItem:
+          active: $props.active
+          children:
+            - Stack:
+                direction: horizontal
+                align: center
+                gap: 8
+                children:
+                  - UserAvatar:
+                      user: $props.dm.user
+                      size: 20
+                      showStatus: true
+                  - Text:
+                      content: $props.dm.user.displayName
+                      weight: $props.dm.unreadCount > 0 ? "bold" : "normal"
+                  - Spacer
+                  - when: $props.dm.unreadCount > 0
+                    then:
+                      - Badge:
+                          value: $props.dm.unreadCount
+                          color: error
+
+  MessageItem:
+    description: メッセージアイテム
+    props:
+      message:
+        type: Message
+        required: true
+      showActions:
+        type: boolean
+        default: true
+      compact:
+        type: boolean
+        default: false
+    events:
+      - replyClick
+      - reactionClick
+      - editClick
+      - deleteClick
+    state:
+      hovered:
+        type: boolean
+        initial: false
+    render:
+      - Box:
+          padding: $props.compact ? $tokens.spacing.sm : $tokens.spacing.md
+          on:mouseEnter: set($state.hovered, true)
+          on:mouseLeave: set($state.hovered, false)
+          background: $state.hovered ? $tokens.colors.hover : "transparent"
+          children:
+            - Stack:
+                direction: horizontal
+                gap: 12
+                children:
+                  - when: not($props.compact)
+                    then:
+                      - UserAvatar:
+                          user: $props.message.user
+                          size: 36
+
+                  - Stack:
+                      direction: vertical
+                      flex: 1
+                      gap: 4
+                      children:
+                        # ヘッダー
+                        - Stack:
+                            direction: horizontal
+                            align: center
+                            gap: 8
+                            children:
+                              - Text:
+                                  content: $props.message.user.displayName
+                                  weight: bold
+                              - Text:
+                                  content: formatDateTime($props.message.timestamp, "HH:mm")
+                                  variant: caption
+                                  color: secondary
+                              - when: $props.message.edited
+                                then:
+                                  - Text:
+                                      content: "(編集済み)"
+                                      variant: caption
+                                      color: secondary
+
+                        # 本文
+                        - MessageContent:
+                            content: $props.message.content
+
+                        # 添付ファイル
+                        - when: $props.message.attachments.length > 0
+                          then:
+                            - AttachmentList:
+                                attachments: $props.message.attachments
+
+                        # リアクション
+                        - when: $props.message.reactions.length > 0
+                          then:
+                            - ReactionBar:
+                                reactions: $props.message.reactions
+                                on:click: emit(reactionClick, $emoji)
+
+                        # スレッド返信数
+                        - when: $props.message.replyCount > 0
+                          then:
+                            - ThreadLink:
+                                count: $props.message.replyCount
+                                on:click: emit(replyClick, $props.message.id)
+
+                  # アクションボタン（ホバー時）
+                  - when: $state.hovered && $props.showActions
+                    then:
+                      - MessageActions:
+                          message: $props.message
+                          on:reply: emit(replyClick, $props.message.id)
+                          on:reaction: emit(reactionClick, $value)
+                          on:edit: emit(editClick, $props.message.id)
+                          on:delete: emit(deleteClick, $props.message.id)
+
+  MessageInput:
+    description: メッセージ入力欄
+    props:
+      value:
+        type: string
+        bind: true
+      placeholder:
+        type: string
+        default: "メッセージを入力"
+      compact:
+        type: boolean
+        default: false
+    events:
+      - submit
+      - attachFile
+    state:
+      showEmojiPicker:
+        type: boolean
+        initial: false
+    render:
+      - Box:
+          padding: $tokens.spacing.md
+          borderTop: 1px solid $tokens.colors.divider
+          children:
+            - RichTextInput:
+                value: $props.value
+                placeholder: $props.placeholder
+                on:change: set($props.value, $value)
+                on:submit: emit(submit)
+                on:keydown:
+                  when: $event.key == "Enter" && !$event.shiftKey
+                  do:
+                    - prevent
+                    - emit: submit
+                toolbar:
+                  - IconButton:
+                      icon: attach_file
+                      tooltip: ファイルを添付
+                      on:click: emit(attachFile)
+                  - IconButton:
+                      icon: emoji_emotions
+                      tooltip: 絵文字
+                      on:click: set($state.showEmojiPicker, true)
+                  - IconButton:
+                      icon: alternate_email
+                      tooltip: メンション
+                      on:click: actions.insertMention
+                  - Spacer
+                  - IconButton:
+                      icon: send
+                      color: primary
+                      disabled: isEmpty(trim($props.value))
+                      on:click: emit(submit)
+
+            - when: $state.showEmojiPicker
+              then:
+                - EmojiPicker:
+                    on:select:
+                      - set: $props.value = $props.value + $value
+                      - set: $state.showEmojiPicker = false
+                    on:close: set($state.showEmojiPicker, false)
+
+  TypingIndicator:
+    description: タイピング中表示
+    props:
+      users:
+        type: User[]
+        required: true
+    render:
+      - Box:
+          padding: $tokens.spacing.sm
+          children:
+            - Stack:
+                direction: horizontal
+                align: center
+                gap: 8
+                children:
+                  - TypingDots
+                  - Text:
+                      variant: caption
+                      color: secondary
+                      content:
+                        switch: $props.users.length
+                        cases:
+                          1: "${$props.users[0].displayName}が入力中..."
+                          2: "${$props.users[0].displayName}と${$props.users[1].displayName}が入力中..."
+                        default: "${$props.users.length}人が入力中..."
