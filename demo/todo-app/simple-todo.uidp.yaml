@@ -1,16 +1,32 @@
 uidp: "0.3.0"
 
 meta:
-  name: シンプルToDo
-  description: タスクの追加・完了・削除・編集ができるToDoアプリ
-  version: "3.0.0"
+  name: プロジェクト管理ToDo
+  description: プロジェクトごとにタスクとタグを管理できるToDoアプリ
+  version: "4.0.0"
 
 types:
+  Project:
+    id: string
+    name: string
+    createdAt: datetime
+
+  TagCategory:
+    id: string
+    name: string
+    icon: string
+
+  Tag:
+    id: string
+    categoryId: string
+    name: string
+
   Todo:
     id: string
     text: string
     description: string?
     completed: boolean
+    tagIds: string[]
     createdAt: datetime
     updatedAt: datetime
 
@@ -19,15 +35,131 @@ types:
     description: string
 
 globals:
+  projects:
+    type: Project[]
+    initial: []
+    persist: true
+
+  currentProjectId:
+    type: string?
+    initial: null
+    persist: true
+
+  tagCategories:
+    type: TagCategory[]
+    initial:
+      - id: "label"
+        name: ラベル
+        icon: "🏷️"
+      - id: "assignee"
+        name: 担当者
+        icon: "👤"
+      - id: "priority"
+        name: 優先度
+        icon: "🔴"
+
+  tags:
+    type: Tag[]
+    initial: []
+    persist: true
+
   todos:
     type: Todo[]
     initial: []
     persist: true
 
 screens:
+  Dashboard:
+    title: ダッシュボード
+    description: 選択中プロジェクトの統計と最近のタスクを表示
+
+    route: /
+
+    computed:
+      currentProject:
+        find: projects
+        where: id equals currentProjectId
+
+      projectTodos:
+        filter: todos
+        where: projectId equals currentProjectId
+
+      incompleteTodos:
+        filter: projectTodos
+        where: not completed
+
+      completedTodos:
+        filter: projectTodos
+        where: completed
+
+      incompleteCount:
+        count: incompleteTodos
+
+      completedCount:
+        count: completedTodos
+
+      recentTodos:
+        take: projectTodos
+        limit: 5
+        sortBy: updatedAt desc
+
+    layout:
+      - AppLayout:
+          children:
+            - Card:
+                padding: tokens.spacing.lg
+                children:
+                  - Text:
+                      variant: h1
+                      content: currentProject.name
+                      align: center
+
+                  - Spacer:
+                      height: tokens.spacing.lg
+
+                  - Stack:
+                      direction: horizontal
+                      gap: tokens.spacing.md
+                      justify: center
+                      children:
+                        - StatCard:
+                            label: 未完了
+                            value: incompleteCount
+
+                        - StatCard:
+                            label: 完了
+                            value: completedCount
+
+                  - Divider:
+                      margin: tokens.spacing.lg
+
+                  - Text:
+                      variant: h3
+                      content: 最近のタスク
+
+                  - Spacer:
+                      height: tokens.spacing.sm
+
+                  - each: recentTodos
+                    as: todo
+                    key: todo.id
+                    render:
+                      - TodoItem:
+                          todo: todo
+                          on:click: navigate(TodoDetail, { id: todo.id })
+
+                  - Spacer:
+                      height: tokens.spacing.md
+
+                  - Button:
+                      label: すべてのタスクを見る →
+                      variant: text
+                      fullWidth: true
+                      on:click: navigate(TodoList)
+
   TodoList:
-    title: やることリスト
-    description: タスクの一覧を表示し、追加・完了・削除ができる
+    title: タスク一覧
+    description: プロジェクト内のタスク一覧を表示し、追加・完了・削除ができる
 
     route: /todos
 
@@ -36,117 +168,184 @@ screens:
         type: string
         initial: ""
 
+      filterStatus:
+        type: enum[all, incomplete, completed]
+        initial: all
+
+      filterLabel:
+        type: string?
+        initial: null
+
+      filterAssignee:
+        type: string?
+        initial: null
+
     computed:
+      projectTodos:
+        filter: todos
+        where: projectId equals currentProjectId
+
+      filteredTodos:
+        filter: projectTodos
+        where:
+          all:
+            - when: filterStatus equals "incomplete"
+              then: not completed
+            - when: filterStatus equals "completed"
+              then: completed
+            - when: filterLabel is not null
+              then: tagIds contains filterLabel
+            - when: filterAssignee is not null
+              then: tagIds contains filterAssignee
+
       remainingCount:
-        count: todos
+        count: projectTodos
         where: not completed
 
       hasCompleted:
-        any: todos
+        any: projectTodos
         where: completed
 
       isEmpty:
-        count: todos
+        count: filteredTodos
         equals: 0
 
+      labelTags:
+        filter: tags
+        where: categoryId equals "label"
+
+      assigneeTags:
+        filter: tags
+        where: categoryId equals "assignee"
+
     layout:
-      - Card:
-          maxWidth: 480px
-          margin: auto
-          padding: tokens.spacing.lg
+      - AppLayout:
           children:
-            - Text:
-                variant: h1
-                content: やることリスト
-                align: center
-
-            - Stack:
-                direction: horizontal
-                gap: tokens.spacing.sm
+            - Card:
+                padding: tokens.spacing.lg
                 children:
-                  - TextField:
-                      value: newTodoText
-                      placeholder: 新しいタスクを入力...
-                      flex: 1
-                      on:change:
-                        set: { newTodoText: value }
-                      on:keydown:
-                        - when: event.key is Enter and newTodoText is not empty
-                          do: actions.addTodo
-
-                  - Button:
-                      label: 追加
-                      variant: primary
-                      disabled: newTodoText is empty
-                      on:click: actions.addTodo
-
-            - Spacer:
-                height: tokens.spacing.md
-
-            - match: isEmpty
-              cases:
-                true:
                   - Text:
-                      content: タスクがありません
-                      color: tokens.colors.text.secondary
+                      variant: h1
+                      content: タスク一覧
                       align: center
 
-                false:
                   - Stack:
-                      direction: vertical
-                      gap: tokens.spacing.xs
+                      direction: horizontal
+                      gap: tokens.spacing.sm
                       children:
-                        - each: todos
-                          as: todo
-                          key: todo.id
-                          render:
-                            - Stack:
-                                direction: horizontal
-                                align: center
-                                gap: tokens.spacing.sm
-                                children:
-                                  - Checkbox:
-                                      checked: todo.completed
-                                      on:change:
+                        - TextField:
+                            value: newTodoText
+                            placeholder: 新しいタスクを入力...
+                            flex: 1
+                            on:change:
+                              set: { newTodoText: value }
+                            on:keydown:
+                              - when: event.key is Enter and newTodoText is not empty
+                                do: actions.addTodo
+
+                        - Button:
+                            label: 追加
+                            variant: primary
+                            disabled: newTodoText is empty
+                            on:click: actions.addTodo
+
+                  - Spacer:
+                      height: tokens.spacing.md
+
+                  - Stack:
+                      direction: horizontal
+                      gap: tokens.spacing.sm
+                      children:
+                        - Select:
+                            label: 状態
+                            value: filterStatus
+                            options:
+                              - value: all
+                                label: すべて
+                              - value: incomplete
+                                label: 未完了
+                              - value: completed
+                                label: 完了
+                            on:change:
+                              set: { filterStatus: value }
+
+                        - Select:
+                            label: ラベル
+                            value: filterLabel
+                            options:
+                              - value: null
+                                label: すべて
+                              - each: labelTags
+                                as: tag
+                                value: tag.id
+                                label: tag.name
+                            on:change:
+                              set: { filterLabel: value }
+
+                        - Select:
+                            label: 担当
+                            value: filterAssignee
+                            options:
+                              - value: null
+                                label: すべて
+                              - each: assigneeTags
+                                as: tag
+                                value: tag.id
+                                label: tag.name
+                            on:change:
+                              set: { filterAssignee: value }
+
+                  - Spacer:
+                      height: tokens.spacing.md
+
+                  - match: isEmpty
+                    cases:
+                      true:
+                        - Text:
+                            content: タスクがありません
+                            color: tokens.colors.text.secondary
+                            align: center
+
+                      false:
+                        - Stack:
+                            direction: vertical
+                            gap: tokens.spacing.xs
+                            children:
+                              - each: filteredTodos
+                                as: todo
+                                key: todo.id
+                                render:
+                                  - TodoItemWithTags:
+                                      todo: todo
+                                      tags: tags
+                                      on:toggle:
                                         bubble: false
                                         action: actions.toggleTodo(todo.id)
-
-                                  - Box:
-                                      flex: 1
                                       on:click: navigate(TodoDetail, { id: todo.id })
-                                      children:
-                                        - Text:
-                                            content: todo.text
-                                            disabled: todo.completed
-
-                                  - IconButton:
-                                      icon: delete
-                                      size: small
-                                      color: error
-                                      on:click:
+                                      on:delete:
                                         bubble: false
                                         action: actions.deleteTodo(todo.id)
 
-            - Spacer:
-                height: tokens.spacing.md
+                  - Spacer:
+                      height: tokens.spacing.md
 
-            - Stack:
-                direction: horizontal
-                justify: space-between
-                align: center
-                children:
-                  - Text:
-                      content: "残り {remainingCount} 件"
-                      variant: caption
-                      color: tokens.colors.text.secondary
+                  - Stack:
+                      direction: horizontal
+                      justify: space-between
+                      align: center
+                      children:
+                        - Text:
+                            content: "残り {remainingCount} 件"
+                            variant: caption
+                            color: tokens.colors.text.secondary
 
-                  - when: hasCompleted
-                    show:
-                      - Button:
-                          label: 完了済みを削除
-                          variant: text
-                          size: small
-                          on:click: actions.clearCompleted
+                        - when: hasCompleted
+                          show:
+                            - Button:
+                                label: 完了済みを削除
+                                variant: text
+                                size: small
+                                on:click: actions.clearCompleted
 
     actions:
       addTodo:
@@ -154,9 +353,11 @@ screens:
           - create: todos
             values:
               id: uuid()
+              projectId: currentProjectId
               text: trim(newTodoText)
               description: ""
               completed: false
+              tagIds: []
               createdAt: now
               updatedAt: now
             position: beginning
@@ -183,11 +384,14 @@ screens:
       clearCompleted:
         steps:
           - delete: todos
-            where: completed
+            where:
+              all:
+                - projectId equals currentProjectId
+                - completed
 
   TodoDetail:
     title: タスク詳細
-    description: タスクの詳細を表示し、編集できる
+    description: タスクの詳細を表示し、タグの追加・編集ができる
 
     route: /todos/:id
 
@@ -215,144 +419,201 @@ screens:
       notFound:
         check: todo is null
 
+      todoTags:
+        filter: tags
+        where: id in todo.tagIds
+
+      labelTags:
+        filter: todoTags
+        where: categoryId equals "label"
+
+      assigneeTags:
+        filter: todoTags
+        where: categoryId equals "assignee"
+
+      priorityTags:
+        filter: todoTags
+        where: categoryId equals "priority"
+
+      availableLabelTags:
+        filter: tags
+        where:
+          all:
+            - categoryId equals "label"
+            - id not in todo.tagIds
+
+      availableAssigneeTags:
+        filter: tags
+        where:
+          all:
+            - categoryId equals "assignee"
+            - id not in todo.tagIds
+
+      availablePriorityTags:
+        filter: tags
+        where:
+          all:
+            - categoryId equals "priority"
+            - id not in todo.tagIds
+
     layout:
-      - Card:
-          maxWidth: 480px
-          margin: auto
-          padding: tokens.spacing.lg
+      - AppLayout:
           children:
-            - Stack:
-                direction: horizontal
-                justify: space-between
-                align: center
+            - Card:
+                padding: tokens.spacing.lg
                 children:
-                  - IconButton:
-                      icon: arrow_back
-                      on:click: navigate(TodoList)
+                  - Stack:
+                      direction: horizontal
+                      justify: space-between
+                      align: center
+                      children:
+                        - IconButton:
+                            icon: arrow_back
+                            on:click: navigate(TodoList)
 
-                  - Text:
-                      variant: h2
-                      content: タスク詳細
+                        - Text:
+                            variant: h2
+                            content: タスク詳細
 
-                  - Box:
-                      width: 40px
+                        - Box:
+                            width: 40px
 
-            - Divider
+                  - Divider
 
-            - Spacer:
-                height: tokens.spacing.md
+                  - Spacer:
+                      height: tokens.spacing.md
 
-            - when: notFound
-              show:
-                - Text:
-                    content: タスクが見つかりません
-                    color: tokens.colors.error
-                    align: center
+                  - when: notFound
+                    show:
+                      - Text:
+                          content: タスクが見つかりません
+                          color: tokens.colors.error
+                          align: center
 
-                - Spacer:
-                    height: tokens.spacing.md
+                      - Button:
+                          label: 一覧に戻る
+                          variant: outlined
+                          fullWidth: true
+                          on:click: navigate(TodoList)
 
-                - Button:
-                    label: 一覧に戻る
-                    variant: outlined
-                    fullWidth: true
-                    on:click: navigate(TodoList)
-
-            - when: not notFound
-              show:
-                - match: isEditing
-                  cases:
-                    false:
-                      - Stack:
-                          direction: vertical
-                          gap: tokens.spacing.md
-                          children:
+                  - when: not notFound
+                    show:
+                      - match: isEditing
+                        cases:
+                          false:
                             - Stack:
-                                direction: horizontal
-                                align: center
-                                gap: tokens.spacing.sm
+                                direction: vertical
+                                gap: tokens.spacing.md
                                 children:
-                                  - Checkbox:
-                                      checked: todo.completed
-                                      on:change: actions.toggleComplete
+                                  - Stack:
+                                      direction: horizontal
+                                      align: center
+                                      gap: tokens.spacing.sm
+                                      children:
+                                        - Checkbox:
+                                            checked: todo.completed
+                                            on:change: actions.toggleComplete
+
+                                        - Text:
+                                            variant: h3
+                                            content: todo.text
+                                            disabled: todo.completed
+
+                                  - when: todo.description is not empty
+                                    show:
+                                      - Text:
+                                          content: todo.description
+                                          color: tokens.colors.text.secondary
+
+                                  - Divider
+
+                                  - TagSection:
+                                      label: ラベル
+                                      tags: labelTags
+                                      availableTags: availableLabelTags
+                                      on:add: actions.addTag
+                                      on:remove: actions.removeTag
+
+                                  - TagSection:
+                                      label: 担当者
+                                      tags: assigneeTags
+                                      availableTags: availableAssigneeTags
+                                      on:add: actions.addTag
+                                      on:remove: actions.removeTag
+
+                                  - TagSection:
+                                      label: 優先度
+                                      tags: priorityTags
+                                      availableTags: availablePriorityTags
+                                      on:add: actions.addTag
+                                      on:remove: actions.removeTag
+
+                                  - Divider
 
                                   - Text:
-                                      variant: h3
-                                      content: todo.text
-                                      disabled: todo.completed
+                                      content: "作成: {formatDateTime(todo.createdAt, 'YYYY/MM/DD HH:mm')}"
+                                      variant: caption
+                                      color: tokens.colors.text.secondary
 
-                            - when: todo.description is not empty
-                              show:
-                                - Text:
-                                    content: todo.description
-                                    color: tokens.colors.text.secondary
+                                  - Text:
+                                      content: "更新: {formatDateTime(todo.updatedAt, 'YYYY/MM/DD HH:mm')}"
+                                      variant: caption
+                                      color: tokens.colors.text.secondary
 
-                            - Divider
+                                  - Spacer:
+                                      height: tokens.spacing.md
 
-                            - Text:
-                                content: "作成: {formatDateTime(todo.createdAt, 'YYYY/MM/DD HH:mm')}"
-                                variant: caption
-                                color: tokens.colors.text.secondary
+                                  - Stack:
+                                      direction: horizontal
+                                      gap: tokens.spacing.sm
+                                      children:
+                                        - Button:
+                                            label: 編集
+                                            variant: primary
+                                            flex: 1
+                                            on:click: actions.startEdit
 
-                            - Text:
-                                content: "更新: {formatDateTime(todo.updatedAt, 'YYYY/MM/DD HH:mm')}"
-                                variant: caption
-                                color: tokens.colors.text.secondary
+                                        - Button:
+                                            label: 削除
+                                            variant: outlined
+                                            color: error
+                                            on:click: actions.delete
 
-                            - Spacer:
-                                height: tokens.spacing.md
-
+                          true:
                             - Stack:
-                                direction: horizontal
-                                gap: tokens.spacing.sm
+                                direction: vertical
+                                gap: tokens.spacing.md
                                 children:
-                                  - Button:
-                                      label: 編集
-                                      variant: primary
-                                      flex: 1
-                                      on:click: actions.startEdit
+                                  - TextField:
+                                      label: タイトル
+                                      value: form.values.text
+                                      error: form.errors.text
+                                      on:change:
+                                        set: { form.values.text: value }
 
-                                  - Button:
-                                      label: 削除
-                                      variant: outlined
-                                      color: error
-                                      on:click: actions.delete
+                                  - TextField:
+                                      label: 詳細（任意）
+                                      value: form.values.description
+                                      multiline: true
+                                      rows: 3
+                                      on:change:
+                                        set: { form.values.description: value }
 
-                    true:
-                      - Stack:
-                          direction: vertical
-                          gap: tokens.spacing.md
-                          children:
-                            - TextField:
-                                label: タイトル
-                                value: form.values.text
-                                error: form.errors.text
-                                on:change:
-                                  set: { form.values.text: value }
+                                  - Stack:
+                                      direction: horizontal
+                                      gap: tokens.spacing.sm
+                                      children:
+                                        - Button:
+                                            label: 保存
+                                            variant: primary
+                                            flex: 1
+                                            disabled: form.values.text is empty
+                                            on:click: actions.save
 
-                            - TextField:
-                                label: 詳細（任意）
-                                value: form.values.description
-                                multiline: true
-                                rows: 3
-                                on:change:
-                                  set: { form.values.description: value }
-
-                            - Stack:
-                                direction: horizontal
-                                gap: tokens.spacing.sm
-                                children:
-                                  - Button:
-                                      label: 保存
-                                      variant: primary
-                                      flex: 1
-                                      disabled: form.values.text is empty
-                                      on:click: actions.save
-
-                                  - Button:
-                                      label: キャンセル
-                                      variant: outlined
-                                      on:click: actions.cancelEdit
+                                        - Button:
+                                            label: キャンセル
+                                            variant: outlined
+                                            on:click: actions.cancelEdit
 
     actions:
       toggleComplete:
@@ -361,6 +622,26 @@ screens:
             find: id equals params.id
             set:
               completed: toggle
+              updatedAt: now
+
+      addTag:
+        params:
+          tagId: string
+        steps:
+          - update: todos
+            find: id equals params.id
+            set:
+              tagIds: append(todo.tagIds, {tagId})
+              updatedAt: now
+
+      removeTag:
+        params:
+          tagId: string
+        steps:
+          - update: todos
+            find: id equals params.id
+            set:
+              tagIds: remove(todo.tagIds, {tagId})
               updatedAt: now
 
       startEdit:
@@ -398,12 +679,419 @@ screens:
           - navigate: TodoList
           - toast: success("削除しました")
 
+  TagList:
+    title: タグ管理
+    description: カテゴリごとにタグを管理する
+
+    route: /tags
+
+    state:
+      newLabelName:
+        type: string
+        initial: ""
+
+      newAssigneeName:
+        type: string
+        initial: ""
+
+      newPriorityName:
+        type: string
+        initial: ""
+
+    computed:
+      labelTags:
+        filter: tags
+        where: categoryId equals "label"
+
+      assigneeTags:
+        filter: tags
+        where: categoryId equals "assignee"
+
+      priorityTags:
+        filter: tags
+        where: categoryId equals "priority"
+
+    layout:
+      - AppLayout:
+          children:
+            - Card:
+                padding: tokens.spacing.lg
+                children:
+                  - Text:
+                      variant: h1
+                      content: タグ管理
+                      align: center
+
+                  - Spacer:
+                      height: tokens.spacing.lg
+
+                  - TagCategorySection:
+                      category: tagCategories[0]
+                      tags: labelTags
+                      newTagName: newLabelName
+                      on:add: actions.addLabel
+                      on:delete: actions.deleteTag
+                      on:click: navigate(TagDetail, { id: tag.id })
+                      on:change:
+                        set: { newLabelName: value }
+
+                  - Spacer:
+                      height: tokens.spacing.lg
+
+                  - TagCategorySection:
+                      category: tagCategories[1]
+                      tags: assigneeTags
+                      newTagName: newAssigneeName
+                      on:add: actions.addAssignee
+                      on:delete: actions.deleteTag
+                      on:click: navigate(TagDetail, { id: tag.id })
+                      on:change:
+                        set: { newAssigneeName: value }
+
+                  - Spacer:
+                      height: tokens.spacing.lg
+
+                  - TagCategorySection:
+                      category: tagCategories[2]
+                      tags: priorityTags
+                      newTagName: newPriorityName
+                      on:add: actions.addPriority
+                      on:delete: actions.deleteTag
+                      on:click: navigate(TagDetail, { id: tag.id })
+                      on:change:
+                        set: { newPriorityName: value }
+
+    actions:
+      addLabel:
+        steps:
+          - when: newLabelName is not empty
+            do:
+              - create: tags
+                values:
+                  id: uuid()
+                  categoryId: "label"
+                  name: trim(newLabelName)
+              - set: { newLabelName: "" }
+
+      addAssignee:
+        steps:
+          - when: newAssigneeName is not empty
+            do:
+              - create: tags
+                values:
+                  id: uuid()
+                  categoryId: "assignee"
+                  name: trim(newAssigneeName)
+              - set: { newAssigneeName: "" }
+
+      addPriority:
+        steps:
+          - when: newPriorityName is not empty
+            do:
+              - create: tags
+                values:
+                  id: uuid()
+                  categoryId: "priority"
+                  name: trim(newPriorityName)
+              - set: { newPriorityName: "" }
+
+      deleteTag:
+        params:
+          id: string
+        confirm:
+          title: タグの削除
+          message: このタグを削除しますか？使用中のタスクからも削除されます。
+          variant: danger
+        steps:
+          - delete: tags
+            where: id equals {id}
+          - each: todos
+            where: tagIds contains {id}
+            do:
+              - update: todos
+                find: id equals item.id
+                set:
+                  tagIds: remove(item.tagIds, {id})
+
+  TagDetail:
+    title: タグ詳細
+    description: タグの詳細と関連タスクを表示
+
+    route: /tags/:id
+
+    params:
+      id:
+        type: string
+        required: true
+
+    state:
+      isEditing:
+        type: boolean
+        initial: false
+
+      editName:
+        type: string
+        initial: ""
+
+    computed:
+      tag:
+        find: tags
+        where: id equals params.id
+
+      notFound:
+        check: tag is null
+
+      category:
+        find: tagCategories
+        where: id equals tag.categoryId
+
+      relatedTodos:
+        filter: todos
+        where: tagIds contains params.id
+
+      relatedCount:
+        count: relatedTodos
+
+    layout:
+      - AppLayout:
+          children:
+            - Card:
+                padding: tokens.spacing.lg
+                children:
+                  - Stack:
+                      direction: horizontal
+                      justify: space-between
+                      align: center
+                      children:
+                        - IconButton:
+                            icon: arrow_back
+                            on:click: navigate(TagList)
+
+                        - Text:
+                            variant: h2
+                            content: タグ詳細
+
+                        - Box:
+                            width: 40px
+
+                  - Divider
+
+                  - Spacer:
+                      height: tokens.spacing.md
+
+                  - when: notFound
+                    show:
+                      - Text:
+                          content: タグが見つかりません
+                          color: tokens.colors.error
+                          align: center
+
+                      - Button:
+                          label: タグ一覧に戻る
+                          variant: outlined
+                          fullWidth: true
+                          on:click: navigate(TagList)
+
+                  - when: not notFound
+                    show:
+                      - match: isEditing
+                        cases:
+                          false:
+                            - Stack:
+                                direction: vertical
+                                gap: tokens.spacing.md
+                                children:
+                                  - Text:
+                                      content: "カテゴリ: {category.name}"
+                                      variant: caption
+                                      color: tokens.colors.text.secondary
+
+                                  - Text:
+                                      variant: h3
+                                      content: "{category.icon} {tag.name}"
+
+                                  - Divider
+
+                                  - Text:
+                                      content: "このタグが付いたタスク ({relatedCount}件):"
+
+                                  - each: relatedTodos
+                                    as: todo
+                                    key: todo.id
+                                    render:
+                                      - TodoItem:
+                                          todo: todo
+                                          on:click: navigate(TodoDetail, { id: todo.id })
+
+                                  - Spacer:
+                                      height: tokens.spacing.md
+
+                                  - Stack:
+                                      direction: horizontal
+                                      gap: tokens.spacing.sm
+                                      children:
+                                        - Button:
+                                            label: 編集
+                                            variant: primary
+                                            flex: 1
+                                            on:click: actions.startEdit
+
+                                        - Button:
+                                            label: 削除
+                                            variant: outlined
+                                            color: error
+                                            on:click: actions.delete
+
+                          true:
+                            - Stack:
+                                direction: vertical
+                                gap: tokens.spacing.md
+                                children:
+                                  - TextField:
+                                      label: タグ名
+                                      value: editName
+                                      on:change:
+                                        set: { editName: value }
+
+                                  - Stack:
+                                      direction: horizontal
+                                      gap: tokens.spacing.sm
+                                      children:
+                                        - Button:
+                                            label: 保存
+                                            variant: primary
+                                            flex: 1
+                                            disabled: editName is empty
+                                            on:click: actions.save
+
+                                        - Button:
+                                            label: キャンセル
+                                            variant: outlined
+                                            on:click: actions.cancelEdit
+
+    actions:
+      startEdit:
+        steps:
+          - set:
+              isEditing: true
+              editName: tag.name
+
+      cancelEdit:
+        steps:
+          - set: { isEditing: false }
+
+      save:
+        steps:
+          - update: tags
+            find: id equals params.id
+            set:
+              name: trim(editName)
+
+          - set: { isEditing: false }
+          - toast: success("保存しました")
+
+      delete:
+        confirm:
+          title: タグの削除
+          message: このタグを削除しますか？使用中のタスクからも削除されます。
+          variant: danger
+        steps:
+          - delete: tags
+            where: id equals params.id
+
+          - each: todos
+            where: tagIds contains params.id
+            do:
+              - update: todos
+                find: id equals item.id
+                set:
+                  tagIds: remove(item.tagIds, params.id)
+
+          - navigate: TagList
+          - toast: success("削除しました")
+
+components:
+  AppLayout:
+    description: 共通レイアウト（ヘッダー + ナビ + コンテンツ）
+    slots:
+      default:
+        required: true
+    render:
+      - Stack:
+          direction: vertical
+          height: 100vh
+          children:
+            - AppHeader:
+                currentProject: currentProject
+                projects: projects
+                on:selectProject: actions.selectProject
+                on:openProjectModal: actions.openProjectModal
+
+            - AppNav
+
+            - Box:
+                flex: 1
+                overflow: auto
+                padding: tokens.spacing.lg
+                children:
+                  - Slot: default
+
+  AppHeader:
+    description: アプリヘッダー（プロジェクト選択）
+    props:
+      currentProject:
+        type: Project?
+      projects:
+        type: Project[]
+    events:
+      - selectProject
+      - openProjectModal
+    render:
+      - Stack:
+          direction: horizontal
+          padding: tokens.spacing.md
+          borderBottom: 1px solid tokens.colors.divider
+          children:
+            - ProjectSelector:
+                currentProject: props.currentProject
+                projects: props.projects
+                on:select: emit(selectProject, value)
+                on:manage: emit(openProjectModal)
+
+  AppNav:
+    description: アプリナビゲーション
+    render:
+      - Stack:
+          direction: horizontal
+          gap: tokens.spacing.md
+          padding: tokens.spacing.sm
+          borderBottom: 1px solid tokens.colors.divider
+          children:
+            - NavLink:
+                label: ダッシュボード
+                to: /
+            - NavLink:
+                label: タスク
+                to: /todos
+            - NavLink:
+                label: タグ管理
+                to: /tags
 
 flows:
-  TodoFlow:
-    initial: TodoList
+  MainFlow:
+    initial: Dashboard
 
     transitions:
+      - from: Dashboard
+        to: TodoList
+        on: viewAllTodos
+
+      - from: Dashboard
+        to: TodoDetail
+        on: selectTodo
+        params:
+          id: todo.id
+
       - from: TodoList
         to: TodoDetail
         on: selectTodo
@@ -415,5 +1103,27 @@ flows:
         on: back
 
       - from: TodoDetail
-        to: TodoList
-        on: delete
+        to: TagDetail
+        on: selectTag
+        params:
+          id: tag.id
+
+      - from: TagList
+        to: TagDetail
+        on: selectTag
+        params:
+          id: tag.id
+
+      - from: TagDetail
+        to: TagList
+        on: back
+
+      - from: TagDetail
+        to: TodoDetail
+        on: selectTodo
+        params:
+          id: todo.id
+
+      - from: "*"
+        to: Dashboard
+        on: changeProject
