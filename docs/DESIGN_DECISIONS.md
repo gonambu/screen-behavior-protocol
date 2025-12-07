@@ -219,7 +219,7 @@ state:
     initial: false
   users:
     type: User[]
-    source: api:/users
+    source: external
 ```
 
 ### 決定

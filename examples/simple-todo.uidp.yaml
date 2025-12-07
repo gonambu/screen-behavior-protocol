@@ -22,7 +22,7 @@ screens:
       todos:
         type: Todo[]
         initial: []
-        persist: localStorage
+        persist: true
 
       newTodoText:
         type: string

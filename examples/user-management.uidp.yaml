@@ -969,9 +969,7 @@ components:
     state:
       activities:
         type: Activity[]
-        source: api:/users/${$props.userId}/activities
-        params:
-          limit: $props.limit
+        source: external
     render:
       - when: $activities.length == 0
         then:

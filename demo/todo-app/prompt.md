@@ -44,7 +44,7 @@ function TodoList() {
   const hasCompleted = todos.some(t => t.completed);
   const isEmpty = todos.length === 0;
 
-  // persist: localStorage
+  // persist: true (実装がlocalStorageを選択)
   useEffect(() => {
     const saved = localStorage.getItem("todos");
     if (saved) setTodos(JSON.parse(saved));

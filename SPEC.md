@@ -29,22 +29,24 @@ UIDPは、フロントエンドUIの設計を構造化テキストで記述す�
 
 ## スコープ
 
-UIDPは「AIコード生成のための設計ドキュメント」として、以下に集中する。
+UIDPは「デザイナーと開発者のコミュニケーションツール」として、**意図**を記述する。実装詳細は含めない。
 
 ### UIDPが扱うもの
 
 | 領域 | 内容 |
 |------|------|
-| 構造 | コンポーネントツリー、相対レイアウト（Stack, Grid, Flex） |
+| 構造 | コンポーネントツリー、相対レイアウト（Stack, Grid） |
 | 状態 | ローカル状態、グローバル状態、フォーム状態、派生状態 |
 | 振る舞い | イベントハンドラ、アクション、画面遷移 |
-| データ | API定義、データソース、リアルタイム購読 |
+| データ | 「外部からデータを取得する」「データを保存する」という**意図** |
 | トークン | デザイントークン（W3C DTCG互換） |
 
 ### UIDPが扱わないもの
 
 | 領域 | 理由 | 責務 |
 |------|------|------|
+| API定義（エンドポイント、HTTPメソッド） | 実装の詳細 | バックエンド/実装 |
+| 永続化先（localStorage, DB） | 実装の詳細 | 実装 |
 | ピクセル単位のレイアウト | 視覚的デザインの詳細 | Figma |
 | 絶対配置・z-index | CSSの詳細 | Figma/CSS |
 | 詳細なCSS（box-shadow, transform） | 実装の詳細 | CSS |
@@ -137,7 +139,7 @@ screens:
 screens:
   UserList:
     state:
-      users: { type: User[], source: api:/users }
+      users: { type: User[], source: external }
     layout:
       - SearchBar:
           bind: $searchQuery
@@ -348,24 +350,24 @@ globals:
   # === 認証ユーザー ===
   currentUser:
     type: User
-    source: api:/me
+    source: external              # 外部から取得（実装が決定）
     # 未認証時はnull
 
   # === アプリ設定 ===
   theme:
     type: enum[light, dark, system]
     initial: system
-    persist: localStorage           # ブラウザに永続化
+    persist: true                 # 永続化する（実装が方法を決定）
 
   # === ワークスペース（Slackのような複数テナント）===
   currentWorkspace:
     type: Workspace
-    persist: localStorage
+    persist: true
 
   # === 機能フラグ ===
   features:
     type: object
-    source: api:/features
+    source: external
     schema:
       darkMode: boolean
       betaFeatures: boolean
@@ -392,32 +394,16 @@ layout:
     then: DarkModeToggle
 ```
 
-### 永続化オプション（persist）
+### 永続化（persist）
 
-| 値 | 説明 |
-|----|------|
-| `localStorage` | ブラウザのローカルストレージに永続化 |
-| `sessionStorage` | セッションストレージに永続化（タブを閉じると消える） |
-| `cookie` | Cookieに永続化 |
-| `url` | URLパラメータと同期 |
+`persist: true` を指定すると、その状態が永続化される（ブラウザを閉じても維持される）。
+永続化の方法（localStorage、cookie、DBなど）は実装が決定する。
 
 ```yaml
 globals:
-  # ブラウザを閉じても維持
   theme:
     type: string
-    persist: localStorage
-
-  # タブを閉じると消える
-  tempData:
-    type: object
-    persist: sessionStorage
-
-  # URLと同期（共有可能）
-  viewMode:
-    type: enum[list, grid]
-    persist: url
-    urlParam: view              # ?view=grid
+    persist: true               # 永続化する
 ```
 
 ---
@@ -525,10 +511,7 @@ screens:
     state:
       users:
         type: PaginatedResponse<User>
-        source: api:/users
-        params:
-          page: $params.page
-          q: $params.q
+        source: external
       loading:
         type: boolean
         initial: true
@@ -788,9 +771,7 @@ state:
   # === 2. 外部データソース ===
   users:
     type: User[]
-    source: api:/users
-    params:
-      page: params.page
+    source: external
     fetchOn: [mount, paramsChange]
 
   # === 3. フォーム状態 ===
@@ -1600,103 +1581,6 @@ components:
   #     footer:                 # footer slotへ
   #       - Button:
   #           label: 編集
-```
-
----
-
-## 12. API（外部連携）
-
-```yaml
-api:
-  # === ベースURL ===
-  baseUrl: https://api.example.com/v1
-
-  # === 共通ヘッダー ===
-  headers:
-    Authorization: "Bearer ${$auth.token}"
-    Content-Type: application/json
-
-  # === エンドポイント定義 ===
-  endpoints:
-    # 一覧取得
-    getUsers:
-      method: GET
-      path: /users
-      params:
-        page: number
-        pageSize: number = 20
-        q: string?
-      response: PaginatedResponse<User>
-
-    # 単体取得
-    getUser:
-      method: GET
-      path: /users/:id
-      response: User
-
-    # 作成
-    createUser:
-      method: POST
-      path: /users
-      body: UserForm
-      response:
-        id: string
-
-    # 更新
-    updateUser:
-      method: PUT
-      path: /users/:id
-      body: UserForm
-      response: User
-
-    # 削除
-    deleteUser:
-      method: DELETE
-      path: /users/:id
-      response:
-        success: boolean
-
-    # 一括削除
-    deleteUsers:
-      method: POST
-      path: /users/bulk-delete
-      body:
-        ids: string[]
-      response:
-        count: number
-
-    # カスタムアクション
-    checkEmail:
-      method: POST
-      path: /users/check-email
-      body:
-        email: string
-        excludeId: string?
-      response:
-        available: boolean
-```
-
-### API呼び出し
-
-```yaml
-# state定義での使用
-state:
-  users:
-    type: PaginatedResponse<User>
-    source: api.getUsers
-    params:
-      page: $params.page
-      q: $params.q
-
-# action内での使用
-actions:
-  submit:
-    steps:
-      - call: api.createUser($form.values)
-      - on:success:
-          - navigate: UserDetail
-            params:
-              id: $result.id
 ```
 
 ---

@@ -210,11 +210,11 @@ api:
 globals:
   currentUser:
     type: User
-    source: api:/me
+    source: external
 
   currentWorkspace:
     type: Workspace
-    persist: localStorage
+    persist: true
 
 # ============================================================
 # メイン画面（シェル）
@@ -261,7 +261,7 @@ screens:
       sidebarCollapsed:
         type: boolean
         initial: false
-        persist: localStorage
+        persist: true
 
       showCreateChannelModal:
         type: boolean

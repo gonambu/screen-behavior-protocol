@@ -231,7 +231,7 @@ const TodoContext = createContext<{
 function TodoProvider({ children }) {
   const [todos, setTodos] = useState<Todo[]>([]);
 
-  // persist: localStorage
+  // persist: true (実装がlocalStorageを選択)
   useEffect(() => {
     const saved = localStorage.getItem("todos");
     if (saved) setTodos(JSON.parse(saved));

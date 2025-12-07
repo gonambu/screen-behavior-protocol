@@ -22,7 +22,7 @@ globals:
   todos:
     type: Todo[]
     initial: []
-    persist: localStorage
+    persist: true
 
 screens:
   TodoList:
