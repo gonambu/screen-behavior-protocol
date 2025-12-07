@@ -316,10 +316,10 @@ screens:
             # ページネーション
             - when: $users.totalPages > 1
               then:
-                - Box:
+                - Stack:
+                    direction: horizontal
+                    justify: center
                     padding: $tokens.spacing.md
-                    display: flex
-                    justifyContent: center
                     children:
                       - Pagination:
                           page: $users.page

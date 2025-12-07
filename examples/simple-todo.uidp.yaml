@@ -135,14 +135,11 @@ screens:
                                           on:change: actions.toggleTodo($todo.id)
 
                                       # タスクテキスト
+                                      # 完了時は視覚的に区別（実装でstrikethrough等を適用）
                                       - Text:
                                           content: $todo.text
                                           flex: 1
-                                          style:
-                                            - when: $todo.completed
-                                              then:
-                                                textDecoration: line-through
-                                                color: $tokens.colors.text.secondary
+                                          disabled: $todo.completed
 
                                       # 削除ボタン
                                       - IconButton:

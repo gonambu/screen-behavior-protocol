@@ -650,10 +650,10 @@ screens:
         action: actions.onNewReply($event)
 
     layout:
+      # 左側にボーダーで区切り（実装で対応）
       - Box:
           width: $props.width
           height: 100%
-          borderLeft: 1px solid $tokens.colors.divider
           children:
             - Flex:
                 direction: column
@@ -668,11 +668,12 @@ screens:
                   # 親メッセージ
                   - Box:
                       padding: $tokens.spacing.md
-                      borderBottom: 1px solid $tokens.colors.divider
                       children:
                         - MessageItem:
                             message: $thread.parentMessage
                             showActions: false
+
+                  - Divider
 
                   # 返信数
                   - Box:
@@ -875,7 +876,6 @@ screens:
             # 検索ヘッダー
             - Box:
                 padding: $tokens.spacing.md
-                borderBottom: 1px solid $tokens.colors.divider
                 children:
                   - SearchInput:
                       value: $query
@@ -883,6 +883,8 @@ screens:
                       autoFocus: true
                       on:change: set($query, $value)
                       on:submit: navigate(Search, { q: $query, type: $params.type })
+
+            - Divider
 
             # フィルタータブ
             - Tabs:
@@ -1186,39 +1188,43 @@ components:
         type: boolean
         initial: false
     render:
-      - Box:
-          padding: $tokens.spacing.md
-          borderTop: 1px solid $tokens.colors.divider
+      - Stack:
+          direction: vertical
           children:
-            - RichTextInput:
-                value: $props.value
-                placeholder: $props.placeholder
-                on:change: set($props.value, $value)
-                on:submit: emit(submit)
-                on:keydown:
-                  when: $event.key == "Enter" && !$event.shiftKey
-                  do:
-                    - prevent
-                    - emit: submit
-                toolbar:
-                  - IconButton:
-                      icon: attach_file
-                      tooltip: ファイルを添付
-                      on:click: emit(attachFile)
-                  - IconButton:
-                      icon: emoji_emotions
-                      tooltip: 絵文字
-                      on:click: set($state.showEmojiPicker, true)
-                  - IconButton:
-                      icon: alternate_email
-                      tooltip: メンション
-                      on:click: actions.insertMention
-                  - Spacer
-                  - IconButton:
-                      icon: send
-                      color: primary
-                      disabled: isEmpty(trim($props.value))
-                      on:click: emit(submit)
+            - Divider
+
+            - Box:
+                padding: $tokens.spacing.md
+                children:
+                  - RichTextInput:
+                      value: $props.value
+                      placeholder: $props.placeholder
+                      on:change: set($props.value, $value)
+                      on:submit: emit(submit)
+                      on:keydown:
+                        when: $event.key == "Enter" && !$event.shiftKey
+                        do:
+                          - prevent
+                          - emit: submit
+                      toolbar:
+                        - IconButton:
+                            icon: attach_file
+                            tooltip: ファイルを添付
+                            on:click: emit(attachFile)
+                        - IconButton:
+                            icon: emoji_emotions
+                            tooltip: 絵文字
+                            on:click: set($state.showEmojiPicker, true)
+                        - IconButton:
+                            icon: alternate_email
+                            tooltip: メンション
+                            on:click: actions.insertMention
+                        - Spacer
+                        - IconButton:
+                            icon: send
+                            color: primary
+                            disabled: isEmpty(trim($props.value))
+                            on:click: emit(submit)
 
             - when: $state.showEmojiPicker
               then:
