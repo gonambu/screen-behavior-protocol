@@ -15,14 +15,14 @@ screens:
     state:
       users:
         type: User[]
-        source: api.getUsers
+        source: external
     layout:
       - SearchBar:
-          bind: $searchQuery
+          bind: searchQuery
           on:submit: actions.search
       - DataTable:
-          data: $users
-          on:rowClick: navigate(UserDetail, { id: $row.id })
+          data: users
+          on:rowClick: navigate(UserDetail, { id: row.id })
 ```
 
 このYAMLから：
@@ -72,21 +72,21 @@ YAMLで記述し、**人間が読んで理解できる**ことを最優先にし
 
 ```yaml
 # 良い例：意図が明確
-- when: $user.isAdmin
-  then: AdminPanel
+- when: user.isAdmin
+  show: AdminPanel
   else: UserPanel
 
 # 避ける：暗号的な省略
-- if: $u.ia then: AP else: UP
+- if: u.ia then: AP else: UP
 ```
 
 ### 2. AI-Parseable
 
 構造が一貫しており、**AIが確実に解釈できる**ようにします。
 
-- 参照は常に `$` プレフィックス（`$users`, `$form.valid`）
+- 状態参照はプレフィックスなし（`users`, `form.valid`）
 - イベントは `on:` プレフィックス（`on:click`, `on:submit`）
-- 条件は `when:` / `switch:` で統一
+- 条件は `when:` / `match:` で統一
 
 ### 3. Framework-Agnostic
 
@@ -148,7 +148,7 @@ screens:
 ### 1. 基本構造
 
 ```yaml
-uidp: "0.2"
+uidp: "0.3.0"
 
 meta:
   name: My App
@@ -166,10 +166,10 @@ screens:
     state:
       users:
         type: User[]
-        source: api.getUsers
+        source: external
     layout:
       - DataTable:
-          data: $users
+          data: users
 ```
 
 ### 2. 状態と参照
@@ -181,26 +181,27 @@ state:
     type: boolean
     initial: true
 
-  # APIデータ
+  # 外部データ
   users:
     type: User[]
-    source: api.getUsers
+    source: external
 
   # フォーム
   form:
-    type: form<UserForm>
+    type: form
+    schema: UserForm
     initial:
       name: ""
       email: ""
 
-# 参照は$プレフィックス
+# 参照はプレフィックスなし
 layout:
-  - when: $loading
-    then: Spinner
+  - when: loading
+    show: Spinner
   - DataTable:
-      data: $users
+      data: users
   - TextField:
-      bind: $form.values.name
+      bind: form.values.name
 ```
 
 ### 3. アクション
@@ -209,40 +210,42 @@ layout:
 actions:
   submit:
     steps:
-      - validate: $form
-      - if: not($form.valid)
+      - validate: form
+      - if: not(form.valid)
         then:
           - return
-      - call: api.createUser($form.values)
-      - on:success:
+      - do: createUser(form.values)
+      - when: success
+        then:
           - toast: success("作成しました")
           - navigate: UserList
-      - on:error:
-          - toast: error($error.message)
+      - when: failure
+        then:
+          - toast: error(message)
 ```
 
 ### 4. 条件分岐
 
 ```yaml
 layout:
-  # when-then-else
-  - when: $loading
-    then: Spinner
+  # when-show-else
+  - when: loading
+    show: Spinner
     else: Content
 
-  # switch
-  - switch: $status
+  # match
+  - match: status
     cases:
       active: ActiveBadge
       inactive: InactiveBadge
     default: UnknownBadge
 
   # 繰り返し
-  - each: $users
+  - each: users
     as: user
     render:
       - UserCard:
-          name: $user.name
+          name: user.name
 ```
 
 ---

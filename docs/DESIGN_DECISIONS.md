@@ -265,9 +265,9 @@ state:
 ```yaml
 actions:
   save:
-    call: api.save($form)
+    do: save(form)
     onSuccess: navigate(List)
-    onError: showError($error)
+    onError: showError(error)
 ```
 
 #### 案2: 手続き的
@@ -276,11 +276,13 @@ actions:
 actions:
   save:
     steps:
-      - call: api.save($form)
-      - on:success:
+      - do: save(form)
+      - when: success
+        then:
           - navigate: List
-      - on:error:
-          - toast: error($error.message)
+      - when: failure
+        then:
+          - toast: error(message)
 ```
 
 ### 決定

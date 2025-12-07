@@ -1,11 +1,11 @@
 # ============================================================
-# User Management - UIDP v0.2 サンプル
+# User Management - UIDP v0.3.0 サンプル
 # ============================================================
 # ユーザー管理のCRUD画面群を定義するサンプル
 # このファイルは完全な画面定義の例として参照できる
 # ============================================================
 
-uidp: "0.2"
+uidp: "0.3.0"
 
 meta:
   name: ユーザー管理
@@ -144,7 +144,7 @@ screens:
     state:
       users:
         type: PaginatedUsers
-        source: api.getUsers
+        source: external
         params:
           page: $params.page
           q: $params.q
@@ -343,12 +343,13 @@ screens:
           cancelLabel: キャンセル
           variant: danger
         steps:
-          - call: api.deleteUser($id)
-          - on:success:
+          - do: deleteUser({ id })
+          - when: success
+            then:
               - toast: success("ユーザーを削除しました")
-              - refetch: $users
-          - on:error:
-              - toast: error("削除に失敗しました: ${$error.message}")
+          - when: failure
+            then:
+              - toast: error("削除に失敗しました: " + message)
 
       bulkDelete:
         confirm:
@@ -358,13 +359,14 @@ screens:
           cancelLabel: キャンセル
           variant: danger
         steps:
-          - call: api.deleteUsers($selectedIds)
-          - on:success:
-              - toast: success("${$result.count}件のユーザーを削除しました")
-              - set: $selectedIds = []
-              - refetch: $users
-          - on:error:
-              - toast: error("削除に失敗しました: ${$error.message}")
+          - do: deleteUsers({ ids: selectedIds })
+          - when: success
+            then:
+              - toast: success(count + "件のユーザーを削除しました")
+              - set: selectedIds = []
+          - when: failure
+            then:
+              - toast: error("削除に失敗しました: " + message)
 
   # ----------------------------------------------------------
   # ユーザー詳細画面
@@ -383,7 +385,7 @@ screens:
     state:
       user:
         type: User
-        source: api.getUser
+        source: external
         params:
           id: $params.id
         fetchOn: [mount]
@@ -512,12 +514,14 @@ screens:
           cancelLabel: キャンセル
           variant: danger
         steps:
-          - call: api.deleteUser($params.id)
-          - on:success:
+          - do: deleteUser({ id: params.id })
+          - when: success
+            then:
               - toast: success("ユーザーを削除しました")
               - navigate: UserList
-          - on:error:
-              - toast: error("削除に失敗しました: ${$error.message}")
+          - when: failure
+            then:
+              - toast: error("削除に失敗しました: " + message)
 
   # ----------------------------------------------------------
   # ユーザー作成画面
@@ -639,18 +643,20 @@ screens:
             then:
               - return
 
-          - set: $submitting = true
-          - call: api.createUser($form.values)
-          - set: $submitting = false
+          - set: submitting = true
+          - do: createUser(form.values)
+          - set: submitting = false
 
-          - on:success:
+          - when: success
+            then:
               - toast: success("ユーザーを作成しました")
               - navigate: UserDetail
                 params:
-                  id: $result.id
+                  id: id
 
-          - on:error:
-              - toast: error("作成に失敗しました: ${$error.message}")
+          - when: failure
+            then:
+              - toast: error("作成に失敗しました: " + message)
 
   # ----------------------------------------------------------
   # ユーザー編集画面
@@ -669,7 +675,7 @@ screens:
     state:
       user:
         type: User
-        source: api.getUser
+        source: external
         params:
           id: $params.id
         fetchOn: [mount]
@@ -805,18 +811,20 @@ screens:
             then:
               - return
 
-          - set: $submitting = true
-          - call: api.updateUser($params.id, $form.values)
-          - set: $submitting = false
+          - set: submitting = true
+          - do: updateUser({ id: params.id, data: form.values })
+          - set: submitting = false
 
-          - on:success:
+          - when: success
+            then:
               - toast: success("ユーザーを更新しました")
               - navigate: UserDetail
                 params:
-                  id: $params.id
+                  id: params.id
 
-          - on:error:
-              - toast: error("更新に失敗しました: ${$error.message}")
+          - when: failure
+            then:
+              - toast: error("更新に失敗しました: " + message)
 
       cancel:
         steps:

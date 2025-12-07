@@ -177,9 +177,6 @@ globals:                         # グローバル状態（アプリ全体で共
 subscriptions:                   # リアルタイムイベント購読（任意）
   - event: ...
 
-api:                             # API定義
-  endpoints: { ... }
-
 components:                      # 再利用可能コンポーネント
   SearchBar: { ... }
 
@@ -578,10 +575,10 @@ screens:
                       on:click: navigate(UserCreate)
               error:
                 - ErrorState:
-                    message: $error.message
+                    message: error.message
                     action:
                       label: 再読み込み
-                      on:click: refetch($users)
+                      on:click: do: reload
 
             - Pagination:
                 page: $users.page
@@ -637,26 +634,28 @@ screens:
           cancelLabel: キャンセル
           variant: danger
         steps:
-          - call: api.deleteUser($id)
-          - on:success:
+          - do: deleteUser({ id })
+          - when: success
+            then:
               - toast: success("ユーザーを削除しました")
-              - refetch: $users
-          - on:error:
-              - toast: error($error.message)
+          - when: failure
+            then:
+              - toast: error(message)
 
       bulkDelete:
         confirm:
           title: 一括削除
-          message: "選択した${$selectedIds.length}件のユーザーを削除しますか？"
+          message: "選択した{count(selectedIds)}件のユーザーを削除しますか？"
           variant: danger
         steps:
-          - call: api.deleteUsers($selectedIds)
-          - on:success:
-              - toast: success("${$result.count}件のユーザーを削除しました")
-              - set: $selectedIds = []
-              - refetch: $users
-          - on:error:
-              - toast: error($error.message)
+          - do: deleteUsers({ ids: selectedIds })
+          - when: success
+            then:
+              - toast: success("{result.count}件のユーザーを削除しました")
+              - set: { selectedIds: [] }
+          - when: failure
+            then:
+              - toast: error(message)
 ```
 
 ### 埋め込みScreen（コンポーネントとしての画面）
@@ -685,15 +684,11 @@ screens:
     state:
       channel:
         type: Channel
-        source: api.getChannel
-        params:
-          channelId: $props.channelId
+        source: external
         fetchOn: [mount, propsChange]   # propsが変わったら再取得
       messages:
         type: Message[]
-        source: api.getMessages
-        params:
-          channelId: $props.channelId
+        source: external
       loading:
         type: boolean
         initial: true
@@ -718,7 +713,7 @@ screens:
     actions:
       sendMessage:
         steps:
-          - call: api.postMessage($props.channelId, $value)
+          - do: sendMessage({ channelId: props.channelId, content: value })
 
   # === 通常のScreen（routeあり）===
   Workspace:
@@ -746,7 +741,7 @@ screens:
 | 特性 | Screen (routeなし) | Component |
 |-----|-------------------|-----------|
 | 状態 | 独自の `state` を持てる | 親から props で受け取る |
-| API取得 | `source: api` で自動取得 | 親で取得して渡す |
+| 外部データ | `source: external` で取得 | 親で取得して渡す |
 | ライフサイクル | マウント/アンマウント | 親に依存 |
 | 購読 | `subscriptions` を持てる | 持てない |
 | 用途 | 独立した機能単位 | 再利用可能なUI部品 |
@@ -1175,29 +1170,25 @@ actions:
       - remove: todos
         where: completed
 
-      # === API呼び出し ===
-      - call: api.createUser(form.values)
-        as: result
-
-      # === 条件分岐 ===
-      - if: result.success
+      # === 外部操作（do） ===
+      # 外部とのやり取りは do: で表現
+      # 成功/失敗の可能性があるため when: でハンドリング
+      - do: createUser({ values: form.values })
+      - when: success
         then:
           - toast: success("作成しました")
           - navigate: UserDetail
             params: { id: result.id }
+      - when: failure
+        then:
+          - toast: error(message)
+
+      # === 条件分岐（if） ===
+      - if: form.isValid
+        then:
+          - do: submitForm({ values: form.values })
         else:
-          - toast: error(result.error)
-
-      # === 結果ハンドリング ===
-      - call: api.deleteUser(id)
-      - on:success:
-          - toast: success("削除しました")
-          - navigate: UserList
-      - on:error:
-          - toast: error(error.message)
-
-      # === データ再取得 ===
-      - refetch: users
+          - toast: error("入力内容を確認してください")
 
       # === 画面遷移 ===
       - navigate: ScreenName
@@ -1214,10 +1205,10 @@ actions:
       - return
 
       # === ループ ===
-      - each: $selectedIds
+      - each: selectedIds
         as: id
         do:
-          - call: api.deleteUser($id)
+          - do: deleteUser({ id })
 ```
 
 ---
@@ -1287,9 +1278,11 @@ flows:
       - from: DeleteConfirmModal
         on: confirm
         effect:
-          - call: api.deleteUser($params.userId)
-          - close                  # モーダルを閉じる
-          - refetch: UserList.$users
+          - do: deleteUser({ id: params.userId })
+          - when: success
+            then:
+              - close              # モーダルを閉じる
+              - toast: success("削除しました")
 
       - from: DeleteConfirmModal
         on: cancel
@@ -1607,8 +1600,6 @@ project/
 │       └── index.uidp.yaml
 ├── flows/
 │   └── user-management.yaml   # 画面遷移定義
-├── api/
-│   └── endpoints.yaml         # API定義
 └── mappings/
     └── mui.yaml               # MUIマッピング
 ```
@@ -1674,21 +1665,35 @@ UIDPドキュメントの検証ルール。
 
 ### 参照チェック
 
-- `$xxx` 参照は定義された状態を参照している
+- 状態参照は定義された状態を参照している
 - `navigate(Screen)` は定義された画面を参照している
-- `api.xxx` は定義されたエンドポイントを参照している
+- `do: xxx` は定義されたアクションを参照している
 
 ### 型チェック
 
 - 状態の型と初期値が一致
 - propsの型と渡される値が一致
-- API response の型と使用箇所が一致
+- 外部データの型と使用箇所が一致
 
 ---
 
 ## 変更履歴
 
-### v0.2.1 (現在)
+### v0.3.0 (現在)
+
+- **スコープの明確化**: API定義・永続化方法を範囲外に
+  - `source: api:/xxx` → `source: external`
+  - `persist: localStorage` → `persist: true`
+  - API定義セクションを削除
+- **外部操作の抽象化**: `call: api.xxx()` → `do: actionName(params)`
+- **結果ハンドリング**: `on:success/on:error` → `when: success/failure`
+- **refetch削除**: データ再取得は実装の責務
+- computed をクエリ形式に変更（JavaScriptの式を廃止）
+- actions を宣言的な操作に変更
+- テンプレート構文を簡略化: `${$var}` → `{var}`
+- $プレフィックスを廃止（文脈で判断）
+
+### v0.2.1
 
 - Globals セクションを追加（アプリ全体の共有状態）
 - Subscriptions セクションを追加（リアルタイムイベント購読）
@@ -1707,7 +1712,6 @@ UIDPドキュメントの検証ルール。
 - 用語集を追加
 - Tokens セクションを追加（W3C DTCG互換）
 - computed（派生状態）を追加
-- API定義セクションを追加
 - 式・関数の詳細を追加
 - ファイル構成例を追加
 
