@@ -863,6 +863,33 @@ layout:
             children: [...]
 ```
 
+### childrenのデフォルト配置
+
+`children`を持つコンポーネントは、特に指定がない限り**垂直方向（上から下）**に子要素を配置する。
+
+```yaml
+# childrenは暗黙的に縦並び
+- Card:
+    children:
+      - Text:
+          content: 1番目（上）
+      - Text:
+          content: 2番目（下）
+
+# 横並びにしたい場合は明示的にStackを使う
+- Card:
+    children:
+      - Stack:
+          direction: horizontal
+          children:
+            - Text:
+                content: 左
+            - Text:
+                content: 右
+```
+
+この規則はHTML（ブロック要素）やReact Native（flexDirection: column）など、多くのUIフレームワークのデフォルト動作と一致する。
+
 ### レイアウトプリミティブ
 
 ```yaml
@@ -1645,6 +1672,7 @@ UIDPドキュメントの検証ルール。
 - Subscriptions セクションを追加（リアルタイムイベント購読）
 - 埋め込みScreen（props付きScreen）のドキュメント追加
 - 永続化オプション（persist）の追加
+- childrenのデフォルト配置ルールを明記（垂直方向）
 - 用語集に Globals, Subscription, Persist を追加
 
 ### v0.2
