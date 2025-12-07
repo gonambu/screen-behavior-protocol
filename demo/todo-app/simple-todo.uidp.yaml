@@ -1,10 +1,3 @@
-# ============================================================
-# Simple ToDo App - UIDP サンプル（複数画面版）
-# ============================================================
-# 画面遷移を含むToDoアプリケーション
-# UIDPの主要機能（状態、レイアウト、アクション、画面遷移）を示す
-# ============================================================
-
 uidp: "0.2.1"
 
 meta:
@@ -12,9 +5,6 @@ meta:
   description: タスクの追加・完了・削除・編集ができるToDoアプリ
   version: "2.0.0"
 
-# ============================================================
-# 型定義
-# ============================================================
 types:
   Todo:
     id: string
@@ -28,22 +18,13 @@ types:
     text: string
     description: string
 
-# ============================================================
-# グローバル状態
-# ============================================================
 globals:
   todos:
     type: Todo[]
     initial: []
     persist: localStorage
 
-# ============================================================
-# 画面定義
-# ============================================================
 screens:
-  # ----------------------------------------------------------
-  # 一覧画面
-  # ----------------------------------------------------------
   TodoList:
     title: やることリスト
     description: タスクの一覧を表示し、追加・完了・削除ができる
@@ -79,7 +60,6 @@ screens:
                 content: やることリスト
                 align: center
 
-            # 入力エリア
             - Stack:
                 direction: horizontal
                 gap: $tokens.spacing.sm
@@ -103,7 +83,6 @@ screens:
             - Spacer:
                 height: $tokens.spacing.md
 
-            # ToDoリスト
             - switch:
                 value: $isEmpty
                 cases:
@@ -135,7 +114,6 @@ screens:
                                             stop: true
                                             action: actions.toggleTodo($todo.id)
 
-                                      # タスクテキスト（クリックで詳細へ）
                                       - Box:
                                           flex: 1
                                           on:click: navigate(TodoDetail, { id: $todo.id })
@@ -155,7 +133,6 @@ screens:
             - Spacer:
                 height: $tokens.spacing.md
 
-            # フッター
             - Stack:
                 direction: horizontal
                 justify: space-between
@@ -211,9 +188,6 @@ screens:
           - set:
               globals.todos: $globals.todos.filter(t => !t.completed)
 
-  # ----------------------------------------------------------
-  # 詳細・編集画面
-  # ----------------------------------------------------------
   TodoDetail:
     title: タスク詳細
     description: タスクの詳細を表示し、編集できる
@@ -250,7 +224,6 @@ screens:
           margin: auto
           padding: $tokens.spacing.lg
           children:
-            # ヘッダー
             - Stack:
                 direction: horizontal
                 justify: space-between
@@ -272,7 +245,6 @@ screens:
             - Spacer:
                 height: $tokens.spacing.md
 
-            # 内容
             - switch:
                 value: $notFound
                 cases:
@@ -297,7 +269,6 @@ screens:
                       - switch:
                           value: $isEditing
                           cases:
-                            # 表示モード
                             - case: false
                               then:
                                 - Stack:
@@ -355,7 +326,6 @@ screens:
                                                 color: error
                                                 on:click: actions.delete
 
-                            # 編集モード
                             - case: true
                               then:
                                 - Stack:
@@ -442,9 +412,6 @@ screens:
           - navigate: TodoList
           - toast: success("削除しました")
 
-# ============================================================
-# 画面遷移定義
-# ============================================================
 flows:
   TodoFlow:
     initial: TodoList
