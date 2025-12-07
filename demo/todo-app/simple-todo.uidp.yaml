@@ -1,9 +1,9 @@
-uidp: "0.2.1"
+uidp: "0.3.0"
 
 meta:
   name: シンプルToDo
   description: タスクの追加・完了・削除・編集ができるToDoアプリ
-  version: "2.0.0"
+  version: "3.0.0"
 
 types:
   Todo:
@@ -38,22 +38,22 @@ screens:
 
     computed:
       remainingCount:
-        type: number
-        expr: $globals.todos.filter(t => !t.completed).length
+        count: todos
+        where: not completed
 
       hasCompleted:
-        type: boolean
-        expr: $globals.todos.some(t => t.completed)
+        any: todos
+        where: completed
 
       isEmpty:
-        type: boolean
-        expr: $globals.todos.length == 0
+        count: todos
+        equals: 0
 
     layout:
       - Card:
           maxWidth: 480px
           margin: auto
-          padding: $tokens.spacing.lg
+          padding: tokens.spacing.lg
           children:
             - Text:
                 variant: h1
@@ -62,76 +62,73 @@ screens:
 
             - Stack:
                 direction: horizontal
-                gap: $tokens.spacing.sm
+                gap: tokens.spacing.sm
                 children:
                   - TextField:
-                      value: $newTodoText
+                      value: newTodoText
                       placeholder: 新しいタスクを入力...
                       flex: 1
                       on:change:
-                        set: { newTodoText: $value }
+                        set: { newTodoText: value }
                       on:keydown:
-                        - when: $event.key == "Enter" && $newTodoText.trim() != ""
-                          then: actions.addTodo
+                        - when: event.key is Enter and newTodoText is not empty
+                          do: actions.addTodo
 
                   - Button:
                       label: 追加
                       variant: primary
-                      disabled: $newTodoText.trim() == ""
+                      disabled: newTodoText is empty
                       on:click: actions.addTodo
 
             - Spacer:
-                height: $tokens.spacing.md
+                height: tokens.spacing.md
 
-            - switch:
-                value: $isEmpty
-                cases:
-                  - case: true
-                    then:
-                      - Text:
-                          content: タスクがありません
-                          color: $tokens.colors.text.secondary
-                          align: center
+            - match: isEmpty
+              cases:
+                true:
+                  - Text:
+                      content: タスクがありません
+                      color: tokens.colors.text.secondary
+                      align: center
 
-                  - case: false
-                    then:
-                      - Stack:
-                          direction: vertical
-                          gap: $tokens.spacing.xs
-                          children:
-                            - each: $globals.todos
-                              as: todo
-                              key: $todo.id
-                              render:
-                                - Stack:
-                                    direction: horizontal
-                                    align: center
-                                    gap: $tokens.spacing.sm
-                                    children:
-                                      - Checkbox:
-                                          checked: $todo.completed
-                                          on:change:
-                                            stop: true
-                                            action: actions.toggleTodo($todo.id)
+                false:
+                  - Stack:
+                      direction: vertical
+                      gap: tokens.spacing.xs
+                      children:
+                        - each: todos
+                          as: todo
+                          key: todo.id
+                          render:
+                            - Stack:
+                                direction: horizontal
+                                align: center
+                                gap: tokens.spacing.sm
+                                children:
+                                  - Checkbox:
+                                      checked: todo.completed
+                                      on:change:
+                                        bubble: false
+                                        action: actions.toggleTodo(todo.id)
 
-                                      - Box:
-                                          flex: 1
-                                          on:click: navigate(TodoDetail, { id: $todo.id })
-                                          children:
-                                            - Text:
-                                                content: $todo.text
-                                                disabled: $todo.completed
+                                  - Box:
+                                      flex: 1
+                                      on:click: navigate(TodoDetail, { id: todo.id })
+                                      children:
+                                        - Text:
+                                            content: todo.text
+                                            disabled: todo.completed
 
-                                      - IconButton:
-                                          icon: delete
-                                          size: small
-                                          color: error
-                                          on:click:
-                                            stop: true
-                                            action: actions.deleteTodo($todo.id)
+                                  - IconButton:
+                                      icon: delete
+                                      size: small
+                                      color: error
+                                      on:click:
+                                        bubble: false
+                                        action: actions.deleteTodo(todo.id)
 
             - Spacer:
-                height: $tokens.spacing.md
+                height: tokens.spacing.md
 
             - Stack:
                 direction: horizontal
@@ -139,12 +136,12 @@ screens:
                 align: center
                 children:
                   - Text:
-                      content: "残り ${$remainingCount} 件"
+                      content: "残り {remainingCount} 件"
                       variant: caption
-                      color: $tokens.colors.text.secondary
+                      color: tokens.colors.text.secondary
 
-                  - when: $hasCompleted
-                    then:
+                  - when: hasCompleted
+                    show:
                       - Button:
                           label: 完了済みを削除
                           variant: text
@@ -154,39 +151,39 @@ screens:
     actions:
       addTodo:
         steps:
-          - set:
-              globals.todos:
-                - id: uuid()
-                  text: $newTodoText.trim()
-                  description: ""
-                  completed: false
-                  createdAt: now()
-                  updatedAt: now()
-                - ...$globals.todos
+          - create: todos
+            values:
+              id: uuid()
+              text: trim(newTodoText)
+              description: ""
+              completed: false
+              createdAt: now
+              updatedAt: now
+            position: beginning
+
           - set: { newTodoText: "" }
 
       toggleTodo:
         params:
           id: string
         steps:
-          - set:
-              globals.todos: $globals.todos.map(t =>
-                t.id == $id
-                  ? { ...t, completed: !t.completed, updatedAt: now() }
-                  : t
-              )
+          - update: todos
+            find: id equals {id}
+            set:
+              completed: toggle
+              updatedAt: now
 
       deleteTodo:
         params:
           id: string
         steps:
-          - set:
-              globals.todos: $globals.todos.filter(t => t.id != $id)
+          - delete: todos
+            where: id equals {id}
 
       clearCompleted:
         steps:
-          - set:
-              globals.todos: $globals.todos.filter(t => !t.completed)
+          - delete: todos
+            where: completed
 
   TodoDetail:
     title: タスク詳細
@@ -201,8 +198,9 @@ screens:
 
     state:
       form:
-        type: form<TodoForm>
-        initialFrom: $todo
+        type: form
+        schema: TodoForm
+        initialFrom: todo
         fields: [text, description]
 
       isEditing:
@@ -211,18 +209,17 @@ screens:
 
     computed:
       todo:
-        type: Todo?
-        expr: $globals.todos.find(t => t.id == $params.id)
+        find: todos
+        where: id equals params.id
 
       notFound:
-        type: boolean
-        expr: $todo == null
+        check: todo is null
 
     layout:
       - Card:
           maxWidth: 480px
           margin: auto
-          padding: $tokens.spacing.lg
+          padding: tokens.spacing.lg
           children:
             - Stack:
                 direction: horizontal
@@ -243,143 +240,135 @@ screens:
             - Divider
 
             - Spacer:
-                height: $tokens.spacing.md
+                height: tokens.spacing.md
 
-            - switch:
-                value: $notFound
-                cases:
-                  - case: true
-                    then:
-                      - Text:
-                          content: タスクが見つかりません
-                          color: $tokens.colors.error
-                          align: center
+            - when: notFound
+              show:
+                - Text:
+                    content: タスクが見つかりません
+                    color: tokens.colors.error
+                    align: center
 
-                      - Spacer:
-                          height: $tokens.spacing.md
+                - Spacer:
+                    height: tokens.spacing.md
 
-                      - Button:
-                          label: 一覧に戻る
-                          variant: outlined
-                          fullWidth: true
-                          on:click: navigate(TodoList)
+                - Button:
+                    label: 一覧に戻る
+                    variant: outlined
+                    fullWidth: true
+                    on:click: navigate(TodoList)
 
-                  - case: false
-                    then:
-                      - switch:
-                          value: $isEditing
-                          cases:
-                            - case: false
-                              then:
-                                - Stack:
-                                    direction: vertical
-                                    gap: $tokens.spacing.md
-                                    children:
-                                      - Stack:
-                                          direction: horizontal
-                                          align: center
-                                          gap: $tokens.spacing.sm
-                                          children:
-                                            - Checkbox:
-                                                checked: $todo.completed
-                                                on:change: actions.toggleComplete
+            - when: not notFound
+              show:
+                - match: isEditing
+                  cases:
+                    false:
+                      - Stack:
+                          direction: vertical
+                          gap: tokens.spacing.md
+                          children:
+                            - Stack:
+                                direction: horizontal
+                                align: center
+                                gap: tokens.spacing.sm
+                                children:
+                                  - Checkbox:
+                                      checked: todo.completed
+                                      on:change: actions.toggleComplete
 
-                                            - Text:
-                                                variant: h3
-                                                content: $todo.text
-                                                disabled: $todo.completed
+                                  - Text:
+                                      variant: h3
+                                      content: todo.text
+                                      disabled: todo.completed
 
-                                      - when: $todo.description
-                                        then:
-                                          - Text:
-                                              content: $todo.description
-                                              color: $tokens.colors.text.secondary
+                            - when: todo.description is not empty
+                              show:
+                                - Text:
+                                    content: todo.description
+                                    color: tokens.colors.text.secondary
 
-                                      - Divider
+                            - Divider
 
-                                      - Text:
-                                          content: "作成: ${formatDateTime($todo.createdAt, 'YYYY/MM/DD HH:mm')}"
-                                          variant: caption
-                                          color: $tokens.colors.text.secondary
+                            - Text:
+                                content: "作成: {formatDateTime(todo.createdAt, 'YYYY/MM/DD HH:mm')}"
+                                variant: caption
+                                color: tokens.colors.text.secondary
 
-                                      - Text:
-                                          content: "更新: ${formatDateTime($todo.updatedAt, 'YYYY/MM/DD HH:mm')}"
-                                          variant: caption
-                                          color: $tokens.colors.text.secondary
+                            - Text:
+                                content: "更新: {formatDateTime(todo.updatedAt, 'YYYY/MM/DD HH:mm')}"
+                                variant: caption
+                                color: tokens.colors.text.secondary
 
-                                      - Spacer:
-                                          height: $tokens.spacing.md
+                            - Spacer:
+                                height: tokens.spacing.md
 
-                                      - Stack:
-                                          direction: horizontal
-                                          gap: $tokens.spacing.sm
-                                          children:
-                                            - Button:
-                                                label: 編集
-                                                variant: primary
-                                                flex: 1
-                                                on:click: actions.startEdit
+                            - Stack:
+                                direction: horizontal
+                                gap: tokens.spacing.sm
+                                children:
+                                  - Button:
+                                      label: 編集
+                                      variant: primary
+                                      flex: 1
+                                      on:click: actions.startEdit
 
-                                            - Button:
-                                                label: 削除
-                                                variant: outlined
-                                                color: error
-                                                on:click: actions.delete
+                                  - Button:
+                                      label: 削除
+                                      variant: outlined
+                                      color: error
+                                      on:click: actions.delete
 
-                            - case: true
-                              then:
-                                - Stack:
-                                    direction: vertical
-                                    gap: $tokens.spacing.md
-                                    children:
-                                      - TextField:
-                                          label: タイトル
-                                          value: $form.values.text
-                                          error: $form.errors.text
-                                          on:change:
-                                            set: { form.values.text: $value }
+                    true:
+                      - Stack:
+                          direction: vertical
+                          gap: tokens.spacing.md
+                          children:
+                            - TextField:
+                                label: タイトル
+                                value: form.values.text
+                                error: form.errors.text
+                                on:change:
+                                  set: { form.values.text: value }
 
-                                      - TextField:
-                                          label: 詳細（任意）
-                                          value: $form.values.description
-                                          multiline: true
-                                          rows: 3
-                                          on:change:
-                                            set: { form.values.description: $value }
+                            - TextField:
+                                label: 詳細（任意）
+                                value: form.values.description
+                                multiline: true
+                                rows: 3
+                                on:change:
+                                  set: { form.values.description: value }
 
-                                      - Stack:
-                                          direction: horizontal
-                                          gap: $tokens.spacing.sm
-                                          children:
-                                            - Button:
-                                                label: 保存
-                                                variant: primary
-                                                flex: 1
-                                                disabled: $form.values.text.trim() == ""
-                                                on:click: actions.save
+                            - Stack:
+                                direction: horizontal
+                                gap: tokens.spacing.sm
+                                children:
+                                  - Button:
+                                      label: 保存
+                                      variant: primary
+                                      flex: 1
+                                      disabled: form.values.text is empty
+                                      on:click: actions.save
 
-                                            - Button:
-                                                label: キャンセル
-                                                variant: outlined
-                                                on:click: actions.cancelEdit
+                                  - Button:
+                                      label: キャンセル
+                                      variant: outlined
+                                      on:click: actions.cancelEdit
 
     actions:
       toggleComplete:
         steps:
-          - set:
-              globals.todos: $globals.todos.map(t =>
-                t.id == $params.id
-                  ? { ...t, completed: !t.completed, updatedAt: now() }
-                  : t
-              )
+          - update: todos
+            find: id equals params.id
+            set:
+              completed: toggle
+              updatedAt: now
 
       startEdit:
         steps:
           - set: { isEditing: true }
           - set:
-              form.values:
-                text: $todo.text
-                description: $todo.description ?? ""
+              form.values.text: todo.text
+              form.values.description: todo.description or ""
 
       cancelEdit:
         steps:
@@ -387,17 +376,13 @@ screens:
 
       save:
         steps:
-          - set:
-              globals.todos: $globals.todos.map(t =>
-                t.id == $params.id
-                  ? {
-                      ...t,
-                      text: $form.values.text.trim(),
-                      description: $form.values.description.trim(),
-                      updatedAt: now()
-                    }
-                  : t
-              )
+          - update: todos
+            find: id equals params.id
+            set:
+              text: trim(form.values.text)
+              description: trim(form.values.description)
+              updatedAt: now
+
           - set: { isEditing: false }
           - toast: success("保存しました")
 
@@ -407,10 +392,12 @@ screens:
           message: このタスクを削除しますか？
           variant: danger
         steps:
-          - set:
-              globals.todos: $globals.todos.filter(t => t.id != $params.id)
+          - delete: todos
+            where: id equals params.id
+
           - navigate: TodoList
           - toast: success("削除しました")
+
 
 flows:
   TodoFlow:
@@ -421,7 +408,7 @@ flows:
         to: TodoDetail
         on: selectTodo
         params:
-          id: $todo.id
+          id: todo.id
 
       - from: TodoDetail
         to: TodoList

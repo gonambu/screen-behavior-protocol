@@ -1,4 +1,4 @@
-# UI Description Protocol (UIDP) v0.2.1
+# UI Description Protocol (UIDP) v0.3.0
 
 **UI画面の構造・状態・遷移を記述するための設計ドキュメント形式**
 
@@ -7,6 +7,7 @@
 ## 概要
 
 UIDPは、フロントエンドUIの設計を構造化テキストで記述するためのプロトコルである。
+**デザイナーと開発者のコミュニケーションツール**として、コードを書かずにUIを定義できる。
 
 ### UIDPが解決する課題
 
@@ -16,6 +17,7 @@ UIDPは、フロントエンドUIの設計を構造化テキストで記述す�
 | 自然言語の仕様書は曖昧 | 厳密な構文で解釈の揺れを排除 |
 | コードは詳細すぎて設計意図が埋もれる | 抽象レベルで意図を明確に表現 |
 | AIによるコード生成の入力として不適切 | 機械可読かつ人間可読な形式 |
+| **プログラミング知識が必要** | **自然言語に近いクエリ形式で非エンジニアも読み書き可能** |
 
 ### UIDPではないもの
 
@@ -69,16 +71,17 @@ UIDPは「AIコード生成のための設計ドキュメント」として、�
 
 ```yaml
 # 良い例：意図が明確
-- when: $user.isAdmin
-  then: AdminPanel
+- when: user.isAdmin
+  show: AdminPanel
 
 # 避ける：暗号的な省略
-- if: $u.ia then: AP
+- if: u.ia then: AP
 ```
 
 - YAMLで記述し、インデントで階層を表現
 - 省略より明確さを優先
 - 日本語・英語どちらでもキー以外のテキストに使用可能
+- **デザイナーが読める自然言語に近い表現**
 
 ### 2. AI-Parseable（AIが解釈可能）
 
@@ -89,13 +92,14 @@ layout:
       prop1: value1
       prop2: value2
 
-# 参照は常に$プレフィックス
-data: $users
-on:click: navigate(UserDetail, { id: $row.id })
+# 参照はクォートなし、文字列はクォート付きで区別
+data: users                              # 参照
+status: "active"                         # 文字列リテラル
+on:click: navigate(UserDetail, { id: row.id })
 ```
 
 - 構造のパターンが一貫している
-- 参照と値を明確に区別できる
+- 参照と文字列リテラルを区別（クォートの有無）
 - 曖昧な自然言語記述を避ける
 
 ### 3. Framework-Agnostic（フレームワーク非依存）
@@ -535,19 +539,19 @@ screens:
     # === 派生状態 ===
     computed:
       hasSelection:
-        type: boolean
-        expr: $selectedIds.length > 0
+        not empty: selectedIds
       canDelete:
-        type: boolean
-        expr: $hasSelection && $currentUser.role == "admin"
+        all:
+          - hasSelection
+          - currentUser.role equals "admin"
 
     # === レイアウト ===
     layout:
       - PageHeader:
-          title: $title
+          title: title
           actions:
             - Button:
-                label: 新規作成
+                label: "新規作成"
                 icon: add
                 variant: primary
                 on:click: navigate(UserCreate)
@@ -557,30 +561,30 @@ screens:
             - Toolbar:
                 left:
                   - SearchField:
-                      value: $params.q
-                      placeholder: 名前またはメールで検索
-                      on:submit: navigate(UserList, { q: $value, page: 1 })
+                      value: params.q
+                      placeholder: "名前またはメールで検索"
+                      on:submit: navigate(UserList, { q: value, page: 1 })
                 right:
-                  - when: $hasSelection
-                    then:
+                  - when: hasSelection
+                    show:
                       - Button:
-                          label: 一括削除
+                          label: "一括削除"
                           variant: danger
-                          disabled: not($canDelete)
+                          disabled: not canDelete
                           on:click: actions.bulkDelete
 
-            - switch: $loading
-              loading:
+            - match: loading
+              true:
                 - TableSkeleton:
                     rows: 10
-              ready:
+              false:
                 - DataTable:
-                    data: $users.items
-                    columns: $columns
+                    data: users.items
+                    columns: columns
                     selectable: true
-                    selection: $selectedIds
-                    on:selectionChange: set($selectedIds, $value)
-                    on:rowClick: navigate(UserDetail, { id: $row.id })
+                    selection: selectedIds
+                    on:selectionChange: set(selectedIds, value)
+                    on:rowClick: navigate(UserDetail, { id: row.id })
               empty:
                 - EmptyState:
                     icon: people
@@ -773,7 +777,6 @@ screens:
 ```yaml
 state:
   # === 1. ローカル状態 ===
-  # 画面内で管理する状態
   isOpen:
     type: boolean
     initial: false
@@ -782,84 +785,145 @@ state:
     type: string
     initial: "overview"
 
-  # === 2. URLパラメータ連動状態 ===
-  # URLと同期する状態（params経由）
-  # → screen.paramsで定義
-
-  # === 3. 外部データソース ===
-  # APIから取得するデータ
+  # === 2. 外部データソース ===
   users:
     type: User[]
     source: api:/users
     params:
-      page: $params.page
-    fetchOn:
-      - mount                    # 画面マウント時
-      - paramsChange             # パラメータ変更時
-    staleTime: 5m                # キャッシュ有効期間
-    retry: 3                     # リトライ回数
+      page: params.page
+    fetchOn: [mount, paramsChange]
 
-  # === 4. フォーム状態 ===
+  # === 3. フォーム状態 ===
   form:
-    type: form<UserForm>
+    type: form
+    schema: UserForm
     initial:
       name: ""
       email: ""
-      role: member
-
-  # === 5. 派生状態（computed） ===
-  # 他の状態から計算される
-  # → screen.computedで定義
+      role: "member"
 ```
+
+### 派生状態（computed）- クエリ形式
+
+派生状態はJavaScriptの式ではなく、**自然言語に近いクエリ形式**で記述する。
+
+```yaml
+computed:
+  # === カウント ===
+  remainingCount:
+    count: todos
+    where: not completed
+
+  totalUsers:
+    count: users
+
+  # === 存在チェック ===
+  hasCompleted:
+    any: todos
+    where: completed
+
+  allCompleted:
+    every: todos
+    where: completed
+
+  # === 空チェック ===
+  isEmpty:
+    empty: todos
+
+  hasData:
+    not empty: users
+
+  # === 集計 ===
+  totalPrice:
+    sum: items
+    field: price
+
+  averageScore:
+    avg: scores
+    field: value
+
+  # === 検索 ===
+  selectedUser:
+    find: users
+    where: id equals selectedId
+
+  activeUsers:
+    filter: users
+    where: status equals "active"
+
+  # === 論理演算 ===
+  canDelete:
+    all:
+      - hasSelection
+      - currentUser.role equals "admin"
+
+  showBanner:
+    any:
+      - isNewUser
+      - hasPromotion
+```
+
+### クエリ演算子一覧
+
+| 演算子 | 説明 | 例 |
+|--------|------|-----|
+| `count` | 条件に合う要素数 | `count: todos` `where: not completed` |
+| `any` | いずれかが条件を満たす | `any: todos` `where: completed` |
+| `every` | すべてが条件を満たす | `every: items` `where: valid` |
+| `empty` | 配列が空か | `empty: todos` |
+| `not empty` | 配列が空でないか | `not empty: users` |
+| `sum` | 合計値 | `sum: items` `field: price` |
+| `avg` | 平均値 | `avg: scores` `field: value` |
+| `find` | 条件に合う最初の要素 | `find: users` `where: id equals selectedId` |
+| `filter` | 条件に合う要素の配列 | `filter: users` `where: status equals "active"` |
+| `all` | すべてがtrue（AND） | `all: [cond1, cond2]` |
+
+### 条件式（where句）
+
+| 式 | 説明 | 例 |
+|----|------|-----|
+| `equals` | 等しい | `status equals "active"` |
+| `not equals` | 等しくない | `role not equals "guest"` |
+| `greater than` | より大きい | `age greater than 18` |
+| `at least` | 以上 | `count at least 1` |
+| `less than` | より小さい | `price less than 100` |
+| `at most` | 以下 | `items at most 10` |
+| `contains` | 含む | `name contains "田"` |
+| `is empty` | 空である | `list is empty` |
+| `in` | リストに含まれる | `status in ["active", "pending"]` |
+| `not` | 否定 | `not completed` |
+| `and` | かつ | `active and verified` |
+| `or` | または | `admin or owner` |
 
 ### フォーム状態の詳細
 
 ```yaml
 state:
   form:
-    type: form<UserForm>
+    type: form
+    schema: UserForm
     initial:
       name: ""
       email: ""
-      role: member
+      role: "member"
 
-    # フィールドごとのバリデーション
     validation:
       name:
         - rule: required
-          message: 名前は必須です
-        - rule: maxLength(100)
-          message: 100文字以内で入力してください
-
+          message: "名前は必須です"
       email:
         - rule: required
-          message: メールアドレスは必須です
+          message: "メールアドレスは必須です"
         - rule: email
-          message: 有効なメールアドレスを入力してください
-        - rule: async(api:/users/check-email)
-          message: このメールアドレスは既に登録されています
-          debounce: 500ms
-
-      role:
-        - rule: required
-          message: 権限を選択してください
-
-    # フォーム全体のバリデーション
-    formRules:
-      - when: $form.startDate > $form.endDate
-        message: 開始日は終了日より前にしてください
-        fields: [startDate, endDate]
+          message: "有効なメールアドレスを入力してください"
 
 # フォームのプロパティ参照
-$form.values          # 全フィールドの値
-$form.values.name     # 特定フィールドの値
-$form.errors          # 全エラー
-$form.errors.name     # 特定フィールドのエラー
-$form.touched         # 操作済みフラグ
-$form.touched.name    # 特定フィールドの操作済みフラグ
-$form.dirty           # 変更があるか
-$form.valid           # 全体の有効性
-$form.submitting      # 送信中フラグ
+form.values          # 全フィールドの値
+form.values.name     # 特定フィールドの値
+form.errors          # 全エラー
+form.errors.name     # 特定フィールドのエラー
+form.dirty           # 変更があるか
+form.valid           # 全体の有効性
 ```
 
 ---
@@ -1074,27 +1138,22 @@ on:click:
 
 ## 8. Actions（アクション）
 
+アクションは**宣言的な操作**として記述する。JavaScriptの式ではなく、意図を明確に表現する。
+
 ### 基本構文
 
 ```yaml
 actions:
   actionName:
-    # パラメータ（任意）
     params:
       id: string
-      force: boolean = false
-
-    # 確認ダイアログ（任意）
     confirm:
-      title: string
-      message: string
-      variant: danger | warning | info
-
-    # 実行ステップ
+      title: "確認"
+      message: "実行しますか？"
+      variant: danger
     steps:
       - step1
       - step2
-      - ...
 ```
 
 ### ステップの種類
@@ -1103,70 +1162,69 @@ actions:
 actions:
   submit:
     steps:
-      # === 状態更新 ===
-      # 単一の状態更新
-      - set: $loading = true
-      - set: $form.values.name = "新しい名前"
+      # === 状態更新（set） ===
+      - set: loading to true
+      - set: form.values.name to "新しい名前"
 
-      # 複数の状態を同時に更新（オブジェクト形式）
-      - set: { loading: false, error: null }
-
-      # 配列の更新（リテラル形式）
+      # 複数の状態を同時に更新
       - set:
-          todos:
-            - id: uuid()
-              text: $newText
-            - ...$todos
+          loading: false
+          error: null
+
+      # === 配列に追加（add） ===
+      - add: todos
+        at: start
+        item:
+          id: uuid()
+          text: newTodoText
+          completed: false
+
+      # === 配列を更新（update） ===
+      - update: todos
+        find: id equals targetId
+        set:
+          completed: toggle
+          updatedAt: now()
+
+      # === 配列から削除（remove） ===
+      - remove: todos
+        where: id equals targetId
+
+      # 条件に合うすべてを削除
+      - remove: todos
+        where: completed
 
       # === API呼び出し ===
-      - call: api.createUser($form.values)
-        as: result                   # 結果を変数に格納
+      - call: api.createUser(form.values)
+        as: result
 
       # === 条件分岐 ===
-      - if: $result.success
+      - if: result.success
         then:
           - toast: success("作成しました")
           - navigate: UserDetail
-            params:
-              id: $result.id
+            params: { id: result.id }
         else:
-          - toast: error($result.error)
+          - toast: error(result.error)
 
-      # === 結果ハンドリング（call直後） ===
-      - call: api.deleteUser($id)
+      # === 結果ハンドリング ===
+      - call: api.deleteUser(id)
       - on:success:
           - toast: success("削除しました")
           - navigate: UserList
       - on:error:
-          - toast: error($error.message)
+          - toast: error(error.message)
 
       # === データ再取得 ===
-      - refetch: $users
+      - refetch: users
 
       # === 画面遷移 ===
       - navigate: ScreenName
-        params:
-          key: value
-
-      # === モーダル表示 ===
-      - modal: ConfirmDialog
-        params:
-          message: "確認してください"
-        on:confirm:
-          - call: api.doSomething()
-        on:cancel:
-          - toast: info("キャンセルしました")
+        params: { key: value }
 
       # === 通知 ===
       - toast: success("メッセージ")
       - toast: error("エラーメッセージ")
-      - toast: warning("警告メッセージ")
-      - toast: info("情報メッセージ")
-
-      # === 複数を並列実行 ===
-      - parallel:
-          - call: api.fetchUsers()
-          - call: api.fetchRoles()
 
       # === 遅延 ===
       - delay: 1000ms
