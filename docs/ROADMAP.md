@@ -1,6 +1,6 @@
-# UIDP ロードマップ
+# SBP ロードマップ
 
-このドキュメントでは、UIDPの今後の開発計画を記載します。
+このドキュメントでは、SBPの今後の開発計画を記載します。
 
 ---
 
@@ -43,20 +43,20 @@ Phase 4: エコシステム構築
 
 ### 目標
 
-UIDPの実用性を検証する。
+SBPの実用性を検証する。
 
 ### タスク
 
 #### 2.1 AIコード生成テスト
 
-- [ ] UIDPをClaudeに渡してReact/MUIコードを生成
+- [ ] SBPをClaudeに渡してReact/MUIコードを生成
 - [ ] 生成されたコードの品質評価
 - [ ] プロンプトの最適化
 - [ ] 複数のAI（Claude、GPT-4、Gemini）での比較
 
 #### 2.2 実プロジェクトでの試用
 
-- [ ] 実際の画面設計にUIDPを使用
+- [ ] 実際の画面設計にSBPを使用
 - [ ] 設計→実装のワークフロー検証
 - [ ] 課題の洗い出し
 
@@ -72,14 +72,14 @@ UIDPの実用性を検証する。
 
 ### 目標
 
-UIDPを使いやすくするツールを実装する。
+SBPを使いやすくするツールを実装する。
 
 ### タスク
 
 #### 3.1 パーサー/バリデーター
 
 ```
-uidp-validate user-list.uidp.yaml
+sbp-validate user-list.sbp.yaml
 ```
 
 - [ ] YAMLパーサー
@@ -98,7 +98,7 @@ uidp-validate user-list.uidp.yaml
 #### 3.3 コード生成器（実験的）
 
 ```
-uidp-generate --target react-mui user-list.uidp.yaml
+sbp-generate --target react-mui user-list.sbp.yaml
 ```
 
 - [ ] React + MUI
@@ -108,7 +108,7 @@ uidp-generate --target react-mui user-list.uidp.yaml
 
 #### 3.4 ビューワー（実験的）
 
-- [ ] UIDPからプレビューUIを生成
+- [ ] SBPからプレビューUIを生成
 - [ ] インタラクティブなプロトタイプ
 
 ---
@@ -117,7 +117,7 @@ uidp-generate --target react-mui user-list.uidp.yaml
 
 ### 目標
 
-UIDPを中心としたエコシステムを構築する。
+SBPを中心としたエコシステムを構築する。
 
 ### タスク
 
@@ -151,6 +151,8 @@ UIDPを中心としたエコシステムを構築する。
 | ダッシュボード | グラフ、カード、KPI表示 | レイアウト、データバインディング |
 | 設定画面 | タブ、トグル、セクション | ネスト、条件分岐 |
 | ログイン/認証 | フォーム、エラー表示、遷移 | バリデーション、状態遷移 |
+
+> ※ ToDoアプリ（プロジェクト・タグ管理付き）、Slackライクチャット、ユーザー管理CRUDは作成済み
 
 ### 優先度中
 
@@ -230,7 +232,7 @@ UIDPを中心としたエコシステムを構築する。
 
 ### Phase 2 終了時
 
-- [ ] 3つ以上の実画面をUIDPで記述
+- [ ] 3つ以上の実画面をSBPで記述
 - [ ] AIによるコード生成が80%以上の精度
 - [ ] 設計→実装のサイクルタイムが30%短縮
 

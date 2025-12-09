@@ -1,17 +1,17 @@
-# UI Description Protocol (UIDP) v0.3.0
+# Screen Behavior Protocol (SBP) v0.3.0
 
-**UI画面の構造・状態・遷移を記述するための設計ドキュメント形式**
+**画面の構造・状態・遷移を記述するための設計ドキュメント形式**
 
 ---
 
 ## 概要
 
-UIDPは、フロントエンドUIの設計を構造化テキストで記述するためのプロトコルである。
-**デザイナーと開発者のコミュニケーションツール**として、コードを書かずにUIを定義できる。
+SBPは、フロントエンド画面の振る舞いを構造化テキストで記述するためのプロトコルである。
+**デザイナーと開発者のコミュニケーションツール**として、コードを書かずに画面の振る舞いを定義できる。
 
-### UIDPが解決する課題
+### SBPが解決する課題
 
-| 従来の課題 | UIDPによる解決 |
+| 従来の課題 | SBPによる解決 |
 |-----------|---------------|
 | デザインカンプは視覚的だが状態や遷移を表現できない | 構造・状態・遷移を一体で記述 |
 | 自然言語の仕様書は曖昧 | 厳密な構文で解釈の揺れを排除 |
@@ -19,7 +19,7 @@ UIDPは、フロントエンドUIの設計を構造化テキストで記述す�
 | AIによるコード生成の入力として不適切 | 機械可読かつ人間可読な形式 |
 | **プログラミング知識が必要** | **自然言語に近いクエリ形式で非エンジニアも読み書き可能** |
 
-### UIDPではないもの
+### SBPではないもの
 
 - **ランタイムではない**: DivKitのように実行時にJSONを解釈してUIを描画するものではない
 - **デザインツールではない**: Figmaのような視覚的デザインツールではない
@@ -29,9 +29,9 @@ UIDPは、フロントエンドUIの設計を構造化テキストで記述す�
 
 ## スコープ
 
-UIDPは「デザイナーと開発者のコミュニケーションツール」として、**意図**を記述する。実装詳細は含めない。
+SBPは「デザイナーと開発者のコミュニケーションツール」として、**意図**を記述する。実装詳細は含めない。
 
-### UIDPが扱うもの
+### SBPが扱うもの
 
 | 領域 | 内容 |
 |------|------|
@@ -41,7 +41,7 @@ UIDPは「デザイナーと開発者のコミュニケーションツール」�
 | データ | 「外部からデータを取得する」「データを保存する」という**意図** |
 | トークン | デザイントークン（W3C DTCG互換） |
 
-### UIDPが扱わないもの
+### SBPが扱わないもの
 
 | 領域 | 理由 | 責務 |
 |------|------|------|
@@ -152,7 +152,7 @@ screens:
 ## ドキュメント構造
 
 ```yaml
-uidp: "0.2.1"                    # プロトコルバージョン（必須）
+sbp: "0.3.0"                     # プロトコルバージョン（必須）
 
 meta:                            # メタデータ
   name: "アプリケーション名"
@@ -161,7 +161,7 @@ meta:                            # メタデータ
   authors: ["author@example.com"]
 
 imports:                         # 外部定義のインポート
-  - ./components/common.uidp.yaml
+  - ./components/common.sbp.yaml
   - ./tokens/design-tokens.yaml
 
 tokens:                          # デザイントークン（W3C DTCG互換）
@@ -1582,22 +1582,22 @@ components:
 
 ```
 project/
-├── uidp.config.yaml           # プロジェクト設定
+├── sbp.config.yaml            # プロジェクト設定
 ├── tokens/
 │   └── design-tokens.yaml     # デザイントークン
 ├── types/
 │   └── entities.yaml          # 型定義
 ├── components/
-│   ├── common.uidp.yaml       # 共通コンポーネント
-│   └── forms.uidp.yaml        # フォーム系コンポーネント
+│   ├── common.sbp.yaml        # 共通コンポーネント
+│   └── forms.sbp.yaml         # フォーム系コンポーネント
 ├── screens/
 │   ├── users/
-│   │   ├── list.uidp.yaml
-│   │   ├── detail.uidp.yaml
-│   │   ├── create.uidp.yaml
-│   │   └── edit.uidp.yaml
+│   │   ├── list.sbp.yaml
+│   │   ├── detail.sbp.yaml
+│   │   ├── create.sbp.yaml
+│   │   └── edit.sbp.yaml
 │   └── dashboard/
-│       └── index.uidp.yaml
+│       └── index.sbp.yaml
 ├── flows/
 │   └── user-management.yaml   # 画面遷移定義
 └── mappings/
@@ -1655,11 +1655,11 @@ on:click: navigate(UserDetail, { id: $row.id })
 
 ## 付録B: バリデーション
 
-UIDPドキュメントの検証ルール。
+SBPドキュメントの検証ルール。
 
 ### 必須チェック
 
-- `uidp` バージョンは必須
+- `sbp` バージョンは必須
 - `screens` または `components` のいずれかが必要
 - Screen には `route` と `layout` が必要
 
