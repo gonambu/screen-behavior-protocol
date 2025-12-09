@@ -1,4 +1,4 @@
-# Screen Behavior Protocol (SBP) v0.3.0
+# Screen Behavior Protocol (SBP) v0.3.1
 
 **画面の構造・状態・遷移を記述するための設計ドキュメント形式**
 
@@ -119,33 +119,29 @@ on:click: navigate(UserDetail, { id: row.id })
 - 抽象的なコンポーネント名を使用
 - マッピングファイルで具象実装に変換
 
-### 4. Progressive Detail（段階的詳細化）
+### 4. 省略可能なフィールド
+
+多くのフィールドは省略可能であり、必要に応じて記述する。
 
 ```yaml
-# Level 1: 概要のみ
+# 最小限の定義（descriptionのみでも有効）
 screens:
   UserList:
-    description: ユーザー一覧を表示し、検索・ページネーション・CRUD操作ができる
+    description: ユーザー一覧を表示
 
-# Level 2: 構造を追加
+# 必要に応じてフィールドを追加
 screens:
   UserList:
-    layout:
-      - SearchBar
-      - DataTable
-      - Pagination
-
-# Level 3: 完全な定義
-screens:
-  UserList:
+    description: ユーザー一覧を表示
+    route: /users
     state:
       users: { type: User[], source: external }
     layout:
-      - SearchBar:
-          bind: $searchQuery
-          on:submit: actions.search
-      # ...
+      - DataTable:
+          data: $users
 ```
+
+**注意**: 上記は同じ画面の「異なる書き方の例」である。YAMLでは同じキーを複数回書くと上書きされるため、マージはされない。
 
 ---
 
@@ -1677,9 +1673,141 @@ SBPドキュメントの検証ルール。
 
 ---
 
+## 付録C: フィールド一覧（クイックリファレンス）
+
+### トップレベルセクション
+
+| セクション | 説明 | 必須 |
+|-----------|------|------|
+| `sbp` | プロトコルバージョン | ✓ |
+| `meta` | メタデータ（name, description, version, authors） | |
+| `imports` | 外部ファイルのインポート | |
+| `tokens` | デザイントークン（W3C DTCG互換） | |
+| `types` | 型定義 | |
+| `globals` | グローバル状態 | |
+| `subscriptions` | リアルタイムイベント購読 | |
+| `components` | 再利用可能コンポーネント | ※ |
+| `screens` | 画面定義 | ※ |
+| `flows` | 画面遷移定義 | |
+
+※ `components` または `screens` のいずれかが必要
+
+### Screen定義
+
+| フィールド | 説明 | 必須 |
+|-----------|------|------|
+| `title` | 画面タイトル | |
+| `description` | 説明 | |
+| `route` | URLルート（/users, /users/:id） | ※ |
+| `params` | URLパラメータ定義 | |
+| `props` | 埋め込みScreen用プロパティ | ※ |
+| `events` | 発火可能なイベント（埋め込みScreen用） | |
+| `state` | ローカル状態 | |
+| `computed` | 派生状態（クエリ形式） | |
+| `subscriptions` | リアルタイム購読 | |
+| `layout` | レイアウト構造 | ✓ |
+| `columns` | DataTable用カラム定義 | |
+| `actions` | アクション定義 | |
+
+※ `route` または `props` のいずれか
+
+### State定義
+
+| フィールド | 説明 | 必須 |
+|-----------|------|------|
+| `type` | 型 | ✓ |
+| `initial` | 初期値 | |
+| `source` | データソース（"external"） | |
+| `fetchOn` | 取得トリガー（mount, paramsChange, propsChange） | |
+| `sync` | propsとの同期（コンポーネント用） | |
+
+### フォーム状態（type: form）
+
+| フィールド | 説明 | 必須 |
+|-----------|------|------|
+| `schema` | フォームの型名 | ✓ |
+| `initial` | 初期値 | |
+| `validation` | バリデーションルール | |
+
+### Action定義
+
+| フィールド | 説明 | 必須 |
+|-----------|------|------|
+| `params` | パラメータ定義 | |
+| `confirm` | 確認ダイアログ | |
+| `steps` | 実行ステップ | ✓ |
+
+### Actionステップ
+
+| コマンド | 説明 | 例 |
+|---------|------|-----|
+| `set` | 状態更新 | `set: loading to true` |
+| `add` | 配列に追加 | `add: todos` `item: {...}` |
+| `update` | 配列を更新 | `update: todos` `find: ...` `set: ...` |
+| `remove` | 配列から削除 | `remove: todos` `where: ...` |
+| `do` | 外部操作 | `do: createUser({...})` |
+| `if` | 条件分岐 | `if: condition` `then: [...]` |
+| `navigate` | 画面遷移 | `navigate: ScreenName` |
+| `toast` | 通知表示 | `toast: success("完了")` |
+| `delay` | 遅延 | `delay: 1000ms` |
+| `return` | 早期終了 | `return` |
+| `each` | ループ | `each: items` `as: item` `do: [...]` |
+
+### Layout構文
+
+| 構文 | 説明 |
+|------|------|
+| `- ComponentName` | 単純なコンポーネント |
+| `- ComponentName: { props }` | プロパティ付き |
+| `children: [...]` | 子要素 |
+| `when: condition` | 条件分岐 |
+| `switch: value` / `cases:` | マッチ分岐 |
+| `each: array` / `render:` | 繰り返し |
+| `on:event: action` | イベントハンドラ |
+
+### Component定義
+
+| フィールド | 説明 | 必須 |
+|-----------|------|------|
+| `description` | 説明 | |
+| `props` | プロパティ定義 | ✓ |
+| `events` | 発火可能なイベント | |
+| `state` | ローカル状態 | |
+| `slots` | スロット定義 | |
+| `render` | レイアウト | ✓ |
+
+### Flow定義
+
+| フィールド | 説明 | 必須 |
+|-----------|------|------|
+| `description` | 説明 | |
+| `initial` | 初期画面 | ✓ |
+| `screens` | フローに含まれる画面 | ✓ |
+| `transitions` | 遷移定義 | ✓ |
+| `guards` | 遷移ガード | |
+
+### Transition定義
+
+| フィールド | 説明 | 必須 |
+|-----------|------|------|
+| `from` | 遷移元（"*"で全画面） | ✓ |
+| `to` | 遷移先 | ✓ |
+| `on` | トリガーイベント | ✓ |
+| `type` | 遷移タイプ（navigate, replace, modal, drawer, back） | |
+| `params` | パラメータ | |
+| `effect` | 遷移時の処理 | |
+
+---
+
 ## 変更履歴
 
-### v0.3.0 (現在)
+### v0.3.1 (現在)
+
+- 「Progressive Detail」セクションを「省略可能なフィールド」に変更
+  - YAMLではマージされないことを明記
+- 「付録C: フィールド一覧（クイックリファレンス）」を追加
+
+### v0.3.0
 
 - **スコープの明確化**: API定義・永続化方法を範囲外に
   - `source: api:/xxx` → `source: external`
