@@ -1,0 +1,1534 @@
+# ============================================================
+# Signup Wizard - SBP v0.4.0 サンプル
+# ============================================================
+# サービス申込ウィザードの画面群を定義するサンプル
+#
+# このサンプルが示すSBPの強み:
+# 1. 条件分岐による画面遷移（個人/法人、無料/有料）
+# 2. ステップ間のデータ依存（種別によるフィールド出し分け）
+# 3. グローバル状態でのウィザードデータ管理
+# 4. 複雑なバリデーション（条件付き必須、クロスフィールド）
+# 5. 途中離脱時の確認ダイアログ
+# 6. 確認画面からの各ステップ編集リンク
+# ============================================================
+
+sbp: "0.4.0"
+
+meta:
+  name: サービス申込ウィザード
+  description: |
+    条件分岐を含む複数ステップの申込フォーム。
+    Figmaでは表現しにくい「動作ロジック」をSBPで明確に定義する例。
+  version: "1.0.0"
+
+# ============================================================
+# 型定義
+# ============================================================
+types:
+  AccountType:
+    enum: [personal, corporate]
+    labels:
+      personal: 個人
+      corporate: 法人
+
+  Plan:
+    enum: [free, starter, professional, enterprise]
+    labels:
+      free: フリー
+      starter: スターター
+      professional: プロフェッショナル
+      enterprise: エンタープライズ
+
+  PaymentMethod:
+    enum: [credit_card, bank_transfer, invoice]
+    labels:
+      credit_card: クレジットカード
+      bank_transfer: 銀行振込
+      invoice: 請求書払い
+
+  # ウィザード全体のデータ構造
+  WizardData:
+    # Step1: アカウント種別
+    accountType: AccountType
+
+    # Step2: 基本情報（共通）
+    email: string
+    password: string
+
+    # Step2-Personal: 個人情報
+    lastName: string?
+    firstName: string?
+    phone: string?
+
+    # Step2-Corporate: 法人情報
+    companyName: string?
+    departmentName: string?
+    representativeName: string?
+    companyPhone: string?
+
+    # Step3: プラン
+    plan: Plan
+
+    # Step4: 支払い情報
+    paymentMethod: PaymentMethod?
+    cardNumber: string?
+    cardExpiry: string?
+    cardCvc: string?
+    billingEmail: string?
+
+  # プラン情報
+  PlanInfo:
+    id: Plan
+    name: string
+    price: number
+    priceUnit: string
+    features: string[]
+    recommended: boolean?
+    availableFor: AccountType[]
+
+# ============================================================
+# 定数
+# ============================================================
+constants:
+  plans:
+    - id: free
+      name: フリー
+      price: 0
+      priceUnit: 月
+      features:
+        - ユーザー1名まで
+        - 基本機能のみ
+        - コミュニティサポート
+      availableFor: [personal]
+
+    - id: starter
+      name: スターター
+      price: 980
+      priceUnit: 月
+      features:
+        - ユーザー3名まで
+        - 全機能利用可能
+        - メールサポート
+      recommended: true
+      availableFor: [personal]
+
+    - id: professional
+      name: プロフェッショナル
+      price: 2980
+      priceUnit: 月
+      features:
+        - ユーザー10名まで
+        - 全機能利用可能
+        - 優先サポート
+        - API連携
+      availableFor: [personal, corporate]
+
+    - id: enterprise
+      name: エンタープライズ
+      price: 9800
+      priceUnit: 月
+      features:
+        - ユーザー無制限
+        - 全機能利用可能
+        - 専任サポート
+        - SLA保証
+        - カスタマイズ対応
+      recommended: true
+      availableFor: [corporate]
+
+# ============================================================
+# グローバル状態
+# ============================================================
+globals:
+  wizardData:
+    type: WizardData
+    initial:
+      accountType: null
+      email: ""
+      password: ""
+      plan: null
+    persist: sessionStorage
+
+  currentStep:
+    type: number
+    initial: 1
+
+  maxReachedStep:
+    type: number
+    initial: 1
+
+# ============================================================
+# 画面定義
+# ============================================================
+screens:
+  # ----------------------------------------------------------
+  # Step1: アカウント種別選択
+  # ----------------------------------------------------------
+  Step1AccountType:
+    title: アカウント種別の選択
+    description: 個人利用か法人利用かを選択
+
+    route: /signup/step1
+
+    computed:
+      # ★ SBPの強み: 選択状態による次へボタンの有効/無効
+      canProceed:
+        expr: $globals.wizardData.accountType is not empty
+
+    layout:
+      - WizardHeader:
+          currentStep: 1
+          totalSteps: 5
+          title: アカウント種別
+
+      - Card:
+          maxWidth: 600
+          children:
+            - Stack:
+                direction: column
+                spacing: 4
+                children:
+                  - Typography:
+                      variant: h6
+                      content: ご利用形態を選択してください
+
+                  - Typography:
+                      variant: body2
+                      color: textSecondary
+                      content: 選択に応じて、次のステップで入力いただく情報が変わります
+
+                  # ★ SBPの強み: カード選択UIの状態管理
+                  - Stack:
+                      direction: row
+                      spacing: 3
+                      children:
+                        - SelectableCard:
+                            selected: $globals.wizardData.accountType is "personal"
+                            on:click: set($globals.wizardData.accountType, "personal")
+                            icon: person
+                            title: 個人
+                            description: |
+                              個人でのご利用
+                              フリープランから始められます
+
+                        - SelectableCard:
+                            selected: $globals.wizardData.accountType is "corporate"
+                            on:click: set($globals.wizardData.accountType, "corporate")
+                            icon: business
+                            title: 法人
+                            description: |
+                              法人・団体でのご利用
+                              チーム向けプランをご用意
+
+                  - Divider
+
+                  - Stack:
+                      direction: row
+                      justifyContent: flex-end
+                      children:
+                        - Button:
+                            label: 次へ
+                            variant: contained
+                            endIcon: arrow_forward
+                            # ★ SBPの強み: 条件による無効化
+                            disabled: not($canProceed)
+                            on:click: actions.goToStep2
+
+    actions:
+      goToStep2:
+        steps:
+          # ★ SBPの強み: 条件分岐による画面遷移
+          - set: $globals.currentStep = 2
+          - set: $globals.maxReachedStep = max($globals.maxReachedStep, 2)
+          - when: $globals.wizardData.accountType is "personal"
+            then:
+              - navigate: Step2Personal
+            else:
+              - navigate: Step2Corporate
+
+  # ----------------------------------------------------------
+  # Step2-Personal: 個人情報入力
+  # ----------------------------------------------------------
+  Step2Personal:
+    title: 個人情報の入力
+    description: 個人利用者向けの情報入力
+
+    route: /signup/step2/personal
+
+    # ★ SBPの強み: 不正なアクセスのガード
+    guard:
+      when: $globals.wizardData.accountType is not "personal"
+      redirect: Step1AccountType
+
+    state:
+      form:
+        type: form
+        schema:
+          lastName: string
+          firstName: string
+          email: string
+          password: string
+          passwordConfirm: string
+          phone: string
+        initial:
+          lastName: $globals.wizardData.lastName ?? ""
+          firstName: $globals.wizardData.firstName ?? ""
+          email: $globals.wizardData.email ?? ""
+          password: ""
+          passwordConfirm: ""
+          phone: $globals.wizardData.phone ?? ""
+
+        validation:
+          lastName:
+            - rule: required
+              message: 姓は必須です
+          firstName:
+            - rule: required
+              message: 名は必須です
+          email:
+            - rule: required
+              message: メールアドレスは必須です
+            - rule: email
+              message: 有効なメールアドレスを入力してください
+          password:
+            - rule: required
+              message: パスワードは必須です
+            - rule: minLength(8)
+              message: 8文字以上で入力してください
+            - rule: pattern("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)")
+              message: 大文字・小文字・数字を含めてください
+          # ★ SBPの強み: クロスフィールドバリデーション
+          passwordConfirm:
+            - rule: required
+              message: パスワード（確認）は必須です
+            - rule: equals($form.values.password)
+              message: パスワードが一致しません
+          phone:
+            - rule: pattern("^0\\d{9,10}$")
+              message: 有効な電話番号を入力してください
+              when: $form.values.phone is not empty
+
+    layout:
+      - WizardHeader:
+          currentStep: 2
+          totalSteps: 5
+          title: 基本情報
+
+      - Card:
+          maxWidth: 600
+          children:
+            - Form:
+                on:submit: actions.proceed
+                children:
+                  - Stack:
+                      direction: column
+                      spacing: 3
+                      children:
+                        - Typography:
+                            variant: h6
+                            content: 基本情報を入力してください
+
+                        # 氏名
+                        - Stack:
+                            direction: row
+                            spacing: 2
+                            children:
+                              - TextField:
+                                  label: 姓
+                                  required: true
+                                  bind: $form.values.lastName
+                                  error: $form.touched.lastName and $form.errors.lastName
+                                  helperText: $form.errors.lastName
+                                  fullWidth: true
+
+                              - TextField:
+                                  label: 名
+                                  required: true
+                                  bind: $form.values.firstName
+                                  error: $form.touched.firstName and $form.errors.firstName
+                                  helperText: $form.errors.firstName
+                                  fullWidth: true
+
+                        # メールアドレス
+                        - TextField:
+                            label: メールアドレス
+                            type: email
+                            required: true
+                            bind: $form.values.email
+                            error: $form.touched.email and $form.errors.email
+                            helperText: $form.errors.email
+                            fullWidth: true
+
+                        # パスワード
+                        - TextField:
+                            label: パスワード
+                            type: password
+                            required: true
+                            bind: $form.values.password
+                            error: $form.touched.password and $form.errors.password
+                            helperText: $form.errors.password ?? "8文字以上、大文字・小文字・数字を含む"
+                            fullWidth: true
+
+                        - TextField:
+                            label: パスワード（確認）
+                            type: password
+                            required: true
+                            bind: $form.values.passwordConfirm
+                            error: $form.touched.passwordConfirm and $form.errors.passwordConfirm
+                            helperText: $form.errors.passwordConfirm
+                            fullWidth: true
+
+                        # 電話番号（任意）
+                        - TextField:
+                            label: 電話番号
+                            type: tel
+                            bind: $form.values.phone
+                            error: $form.touched.phone and $form.errors.phone
+                            helperText: $form.errors.phone ?? "任意"
+                            fullWidth: true
+
+                        - Divider
+
+                        # ナビゲーション
+                        - Stack:
+                            direction: row
+                            justifyContent: space-between
+                            children:
+                              - Button:
+                                  label: 戻る
+                                  variant: text
+                                  startIcon: arrow_back
+                                  on:click: actions.goBack
+
+                              - Button:
+                                  label: 次へ
+                                  variant: contained
+                                  type: submit
+                                  endIcon: arrow_forward
+                                  disabled: not($form.valid)
+
+    actions:
+      goBack:
+        steps:
+          - set: $globals.currentStep = 1
+          - navigate: Step1AccountType
+
+      proceed:
+        steps:
+          - validate: $form
+          - when: not($form.valid)
+            then:
+              - return
+          # グローバル状態に保存
+          - set: $globals.wizardData.lastName = $form.values.lastName
+          - set: $globals.wizardData.firstName = $form.values.firstName
+          - set: $globals.wizardData.email = $form.values.email
+          - set: $globals.wizardData.password = $form.values.password
+          - set: $globals.wizardData.phone = $form.values.phone
+          - set: $globals.currentStep = 3
+          - set: $globals.maxReachedStep = max($globals.maxReachedStep, 3)
+          - navigate: Step3Plan
+
+  # ----------------------------------------------------------
+  # Step2-Corporate: 法人情報入力
+  # ----------------------------------------------------------
+  Step2Corporate:
+    title: 法人情報の入力
+    description: 法人利用者向けの情報入力
+
+    route: /signup/step2/corporate
+
+    guard:
+      when: $globals.wizardData.accountType is not "corporate"
+      redirect: Step1AccountType
+
+    state:
+      form:
+        type: form
+        schema:
+          companyName: string
+          departmentName: string
+          representativeName: string
+          email: string
+          password: string
+          passwordConfirm: string
+          companyPhone: string
+        initial:
+          companyName: $globals.wizardData.companyName ?? ""
+          departmentName: $globals.wizardData.departmentName ?? ""
+          representativeName: $globals.wizardData.representativeName ?? ""
+          email: $globals.wizardData.email ?? ""
+          password: ""
+          passwordConfirm: ""
+          companyPhone: $globals.wizardData.companyPhone ?? ""
+
+        validation:
+          companyName:
+            - rule: required
+              message: 法人名は必須です
+          representativeName:
+            - rule: required
+              message: ご担当者名は必須です
+          email:
+            - rule: required
+              message: メールアドレスは必須です
+            - rule: email
+              message: 有効なメールアドレスを入力してください
+          password:
+            - rule: required
+              message: パスワードは必須です
+            - rule: minLength(8)
+              message: 8文字以上で入力してください
+          passwordConfirm:
+            - rule: required
+              message: パスワード（確認）は必須です
+            - rule: equals($form.values.password)
+              message: パスワードが一致しません
+          companyPhone:
+            - rule: required
+              message: 電話番号は必須です
+
+    layout:
+      - WizardHeader:
+          currentStep: 2
+          totalSteps: 5
+          title: 法人情報
+
+      - Card:
+          maxWidth: 600
+          children:
+            - Form:
+                on:submit: actions.proceed
+                children:
+                  - Stack:
+                      direction: column
+                      spacing: 3
+                      children:
+                        - Typography:
+                            variant: h6
+                            content: 法人情報を入力してください
+
+                        # 法人情報
+                        - TextField:
+                            label: 法人名
+                            required: true
+                            bind: $form.values.companyName
+                            error: $form.touched.companyName and $form.errors.companyName
+                            helperText: $form.errors.companyName
+                            fullWidth: true
+
+                        - TextField:
+                            label: 部署名
+                            bind: $form.values.departmentName
+                            helperText: 任意
+                            fullWidth: true
+
+                        - TextField:
+                            label: ご担当者名
+                            required: true
+                            bind: $form.values.representativeName
+                            error: $form.touched.representativeName and $form.errors.representativeName
+                            helperText: $form.errors.representativeName
+                            fullWidth: true
+
+                        - TextField:
+                            label: 電話番号
+                            type: tel
+                            required: true
+                            bind: $form.values.companyPhone
+                            error: $form.touched.companyPhone and $form.errors.companyPhone
+                            helperText: $form.errors.companyPhone
+                            fullWidth: true
+
+                        - Divider
+
+                        # アカウント情報
+                        - Typography:
+                            variant: h6
+                            content: アカウント情報
+
+                        - TextField:
+                            label: メールアドレス
+                            type: email
+                            required: true
+                            bind: $form.values.email
+                            error: $form.touched.email and $form.errors.email
+                            helperText: $form.errors.email
+                            fullWidth: true
+
+                        - TextField:
+                            label: パスワード
+                            type: password
+                            required: true
+                            bind: $form.values.password
+                            error: $form.touched.password and $form.errors.password
+                            helperText: $form.errors.password ?? "8文字以上"
+                            fullWidth: true
+
+                        - TextField:
+                            label: パスワード（確認）
+                            type: password
+                            required: true
+                            bind: $form.values.passwordConfirm
+                            error: $form.touched.passwordConfirm and $form.errors.passwordConfirm
+                            helperText: $form.errors.passwordConfirm
+                            fullWidth: true
+
+                        - Divider
+
+                        - Stack:
+                            direction: row
+                            justifyContent: space-between
+                            children:
+                              - Button:
+                                  label: 戻る
+                                  variant: text
+                                  startIcon: arrow_back
+                                  on:click: actions.goBack
+
+                              - Button:
+                                  label: 次へ
+                                  variant: contained
+                                  type: submit
+                                  endIcon: arrow_forward
+                                  disabled: not($form.valid)
+
+    actions:
+      goBack:
+        steps:
+          - set: $globals.currentStep = 1
+          - navigate: Step1AccountType
+
+      proceed:
+        steps:
+          - validate: $form
+          - when: not($form.valid)
+            then:
+              - return
+          - set: $globals.wizardData.companyName = $form.values.companyName
+          - set: $globals.wizardData.departmentName = $form.values.departmentName
+          - set: $globals.wizardData.representativeName = $form.values.representativeName
+          - set: $globals.wizardData.companyPhone = $form.values.companyPhone
+          - set: $globals.wizardData.email = $form.values.email
+          - set: $globals.wizardData.password = $form.values.password
+          - set: $globals.currentStep = 3
+          - set: $globals.maxReachedStep = max($globals.maxReachedStep, 3)
+          - navigate: Step3Plan
+
+  # ----------------------------------------------------------
+  # Step3: プラン選択
+  # ----------------------------------------------------------
+  Step3Plan:
+    title: プランの選択
+    description: 利用プランを選択
+
+    route: /signup/step3
+
+    guard:
+      when: $globals.currentStep < 3
+      redirect: Step1AccountType
+
+    computed:
+      # ★ SBPの強み: アカウント種別によるプラン絞り込み
+      availablePlans:
+        expr: |
+          $constants.plans filtered by
+            $globals.wizardData.accountType in item.availableFor
+
+      canProceed:
+        expr: $globals.wizardData.plan is not empty
+
+      selectedPlanInfo:
+        expr: |
+          $constants.plans find by item.id equals $globals.wizardData.plan
+
+      # ★ SBPの強み: プラン種別による次ステップ判定
+      requiresPayment:
+        expr: $globals.wizardData.plan is not "free"
+
+    layout:
+      - WizardHeader:
+          currentStep: 3
+          totalSteps: 5
+          title: プラン選択
+
+      - Box:
+          maxWidth: 900
+          margin: "0 auto"
+          children:
+            - Stack:
+                direction: column
+                spacing: 4
+                children:
+                  - Typography:
+                      variant: h5
+                      align: center
+                      content: ご利用プランを選択してください
+
+                  # ★ SBPの強み: 動的に生成されるプランカード
+                  - Grid:
+                      container: true
+                      spacing: 3
+                      justifyContent: center
+                      children:
+                        - each: $availablePlans
+                          as: plan
+                          render:
+                            - Grid:
+                                item: true
+                                xs: 12
+                                sm: 6
+                                md: 3
+                                children:
+                                  - PlanCard:
+                                      plan: $plan
+                                      selected: $globals.wizardData.plan equals $plan.id
+                                      on:select: set($globals.wizardData.plan, $plan.id)
+
+                  - Divider
+
+                  - Stack:
+                      direction: row
+                      justifyContent: space-between
+                      children:
+                        - Button:
+                            label: 戻る
+                            variant: text
+                            startIcon: arrow_back
+                            on:click: actions.goBack
+
+                        - Button:
+                            label: 次へ
+                            variant: contained
+                            endIcon: arrow_forward
+                            disabled: not($canProceed)
+                            on:click: actions.proceed
+
+    actions:
+      goBack:
+        steps:
+          - set: $globals.currentStep = 2
+          - when: $globals.wizardData.accountType is "personal"
+            then:
+              - navigate: Step2Personal
+            else:
+              - navigate: Step2Corporate
+
+      proceed:
+        steps:
+          # ★ SBPの強み: 条件による画面遷移の分岐
+          - when: $requiresPayment
+            then:
+              - set: $globals.currentStep = 4
+              - set: $globals.maxReachedStep = max($globals.maxReachedStep, 4)
+              - navigate: Step4Payment
+            else:
+              # 無料プランの場合は支払い情報をスキップ
+              - set: $globals.currentStep = 5
+              - set: $globals.maxReachedStep = max($globals.maxReachedStep, 5)
+              - navigate: Step5Confirm
+
+  # ----------------------------------------------------------
+  # Step4: 支払い情報入力（有料プランのみ）
+  # ----------------------------------------------------------
+  Step4Payment:
+    title: 支払い情報の入力
+    description: 有料プラン用の支払い情報入力
+
+    route: /signup/step4
+
+    guard:
+      # ★ SBPの強み: 無料プランの場合はこの画面をスキップ
+      when: $globals.wizardData.plan is "free" or $globals.currentStep < 4
+      redirect: Step3Plan
+
+    state:
+      form:
+        type: form
+        schema:
+          paymentMethod: PaymentMethod
+          cardNumber: string
+          cardExpiry: string
+          cardCvc: string
+          billingEmail: string
+        initial:
+          paymentMethod: $globals.wizardData.paymentMethod ?? "credit_card"
+          cardNumber: ""
+          cardExpiry: ""
+          cardCvc: ""
+          billingEmail: $globals.wizardData.billingEmail ?? $globals.wizardData.email
+
+        validation:
+          paymentMethod:
+            - rule: required
+              message: 支払い方法を選択してください
+
+          # ★ SBPの強み: 支払い方法による条件付きバリデーション
+          cardNumber:
+            - when: $form.values.paymentMethod is "credit_card"
+              rule: required
+              message: カード番号は必須です
+            - when: $form.values.paymentMethod is "credit_card"
+              rule: pattern("^\\d{16}$")
+              message: 有効なカード番号を入力してください
+
+          cardExpiry:
+            - when: $form.values.paymentMethod is "credit_card"
+              rule: required
+              message: 有効期限は必須です
+            - when: $form.values.paymentMethod is "credit_card"
+              rule: pattern("^(0[1-9]|1[0-2])\\/\\d{2}$")
+              message: MM/YY形式で入力してください
+
+          cardCvc:
+            - when: $form.values.paymentMethod is "credit_card"
+              rule: required
+              message: セキュリティコードは必須です
+            - when: $form.values.paymentMethod is "credit_card"
+              rule: pattern("^\\d{3,4}$")
+              message: 3〜4桁の数字を入力してください
+
+          billingEmail:
+            - rule: required
+              message: 請求先メールアドレスは必須です
+            - rule: email
+              message: 有効なメールアドレスを入力してください
+
+    computed:
+      # 法人の場合は請求書払いも選択可能
+      availablePaymentMethods:
+        expr: |
+          when $globals.wizardData.accountType is "corporate"
+            then [credit_card, bank_transfer, invoice]
+            else [credit_card, bank_transfer]
+
+      showCardFields:
+        expr: $form.values.paymentMethod is "credit_card"
+
+    layout:
+      - WizardHeader:
+          currentStep: 4
+          totalSteps: 5
+          title: 支払い情報
+
+      - Card:
+          maxWidth: 600
+          children:
+            - Form:
+                on:submit: actions.proceed
+                children:
+                  - Stack:
+                      direction: column
+                      spacing: 3
+                      children:
+                        - Typography:
+                            variant: h6
+                            content: 支払い方法を選択してください
+
+                        # 支払い方法選択
+                        - RadioGroup:
+                            bind: $form.values.paymentMethod
+                            options:
+                              - value: credit_card
+                                label: クレジットカード
+                                description: VISA, Mastercard, JCB, AMEX
+
+                              - value: bank_transfer
+                                label: 銀行振込
+                                description: お振込み確認後にアカウント有効化
+
+                              # ★ SBPの強み: 条件による選択肢の出し分け
+                              - when: $globals.wizardData.accountType is "corporate"
+                                then:
+                                  - value: invoice
+                                    label: 請求書払い
+                                    description: 月末締め翌月末払い
+
+                        # ★ SBPの強み: 支払い方法による入力欄の出し分け
+                        - when: $showCardFields
+                          then:
+                            - Stack:
+                                direction: column
+                                spacing: 2
+                                children:
+                                  - Divider
+
+                                  - Typography:
+                                      variant: subtitle1
+                                      content: カード情報
+
+                                  - TextField:
+                                      label: カード番号
+                                      required: true
+                                      bind: $form.values.cardNumber
+                                      error: $form.touched.cardNumber and $form.errors.cardNumber
+                                      helperText: $form.errors.cardNumber
+                                      placeholder: "1234567890123456"
+                                      fullWidth: true
+
+                                  - Stack:
+                                      direction: row
+                                      spacing: 2
+                                      children:
+                                        - TextField:
+                                            label: 有効期限
+                                            required: true
+                                            bind: $form.values.cardExpiry
+                                            error: $form.touched.cardExpiry and $form.errors.cardExpiry
+                                            helperText: $form.errors.cardExpiry ?? "MM/YY"
+                                            placeholder: "12/25"
+
+                                        - TextField:
+                                            label: セキュリティコード
+                                            required: true
+                                            bind: $form.values.cardCvc
+                                            error: $form.touched.cardCvc and $form.errors.cardCvc
+                                            helperText: $form.errors.cardCvc ?? "カード裏面の3〜4桁"
+                                            placeholder: "123"
+
+                        - Divider
+
+                        - TextField:
+                            label: 請求先メールアドレス
+                            type: email
+                            required: true
+                            bind: $form.values.billingEmail
+                            error: $form.touched.billingEmail and $form.errors.billingEmail
+                            helperText: $form.errors.billingEmail ?? "請求書・領収書の送付先"
+                            fullWidth: true
+
+                        - Divider
+
+                        - Stack:
+                            direction: row
+                            justifyContent: space-between
+                            children:
+                              - Button:
+                                  label: 戻る
+                                  variant: text
+                                  startIcon: arrow_back
+                                  on:click: actions.goBack
+
+                              - Button:
+                                  label: 次へ
+                                  variant: contained
+                                  type: submit
+                                  endIcon: arrow_forward
+                                  disabled: not($form.valid)
+
+    actions:
+      goBack:
+        steps:
+          - set: $globals.currentStep = 3
+          - navigate: Step3Plan
+
+      proceed:
+        steps:
+          - validate: $form
+          - when: not($form.valid)
+            then:
+              - return
+          - set: $globals.wizardData.paymentMethod = $form.values.paymentMethod
+          - when: $form.values.paymentMethod is "credit_card"
+            then:
+              - set: $globals.wizardData.cardNumber = $form.values.cardNumber
+              - set: $globals.wizardData.cardExpiry = $form.values.cardExpiry
+              - set: $globals.wizardData.cardCvc = $form.values.cardCvc
+          - set: $globals.wizardData.billingEmail = $form.values.billingEmail
+          - set: $globals.currentStep = 5
+          - set: $globals.maxReachedStep = max($globals.maxReachedStep, 5)
+          - navigate: Step5Confirm
+
+  # ----------------------------------------------------------
+  # Step5: 確認画面
+  # ----------------------------------------------------------
+  Step5Confirm:
+    title: 入力内容の確認
+    description: 入力内容を確認して申し込み
+
+    route: /signup/step5
+
+    guard:
+      when: $globals.currentStep < 5
+      redirect: Step1AccountType
+
+    state:
+      submitting:
+        type: boolean
+        initial: false
+
+      agreedToTerms:
+        type: boolean
+        initial: false
+
+    computed:
+      selectedPlanInfo:
+        expr: |
+          $constants.plans find by item.id equals $globals.wizardData.plan
+
+      canSubmit:
+        expr: $agreedToTerms and not($submitting)
+
+      # 支払い方法の表示用ラベル
+      paymentMethodLabel:
+        expr: |
+          match $globals.wizardData.paymentMethod
+            "credit_card" => "クレジットカード"
+            "bank_transfer" => "銀行振込"
+            "invoice" => "請求書払い"
+            default => "-"
+
+    layout:
+      - WizardHeader:
+          currentStep: 5
+          totalSteps: 5
+          title: 確認
+
+      - Card:
+          maxWidth: 700
+          children:
+            - Stack:
+                direction: column
+                spacing: 3
+                children:
+                  - Typography:
+                      variant: h5
+                      content: 入力内容をご確認ください
+
+                  # ★ SBPの強み: 条件による表示の出し分け + 編集リンク
+                  # アカウント情報セクション
+                  - ConfirmSection:
+                      title: アカウント情報
+                      editAction: actions.editStep1
+                      items:
+                        - label: アカウント種別
+                          value: |
+                            when $globals.wizardData.accountType is "personal"
+                              then "個人"
+                              else "法人"
+
+                  # 個人情報（個人の場合）
+                  - when: $globals.wizardData.accountType is "personal"
+                    then:
+                      - ConfirmSection:
+                          title: 個人情報
+                          editAction: actions.editStep2
+                          items:
+                            - label: お名前
+                              value: $globals.wizardData.lastName + " " + $globals.wizardData.firstName
+                            - label: メールアドレス
+                              value: $globals.wizardData.email
+                            - label: 電話番号
+                              value: $globals.wizardData.phone ?? "未入力"
+
+                  # 法人情報（法人の場合）
+                  - when: $globals.wizardData.accountType is "corporate"
+                    then:
+                      - ConfirmSection:
+                          title: 法人情報
+                          editAction: actions.editStep2
+                          items:
+                            - label: 法人名
+                              value: $globals.wizardData.companyName
+                            - label: 部署名
+                              value: $globals.wizardData.departmentName ?? "未入力"
+                            - label: ご担当者名
+                              value: $globals.wizardData.representativeName
+                            - label: 電話番号
+                              value: $globals.wizardData.companyPhone
+                            - label: メールアドレス
+                              value: $globals.wizardData.email
+
+                  # プラン情報
+                  - ConfirmSection:
+                      title: ご利用プラン
+                      editAction: actions.editStep3
+                      items:
+                        - label: プラン
+                          value: $selectedPlanInfo.name
+                        - label: 月額料金
+                          value: |
+                            when $selectedPlanInfo.price equals 0
+                              then "無料"
+                              else "¥" + $selectedPlanInfo.price + "/月"
+
+                  # 支払い情報（有料プランの場合）
+                  - when: $globals.wizardData.plan is not "free"
+                    then:
+                      - ConfirmSection:
+                          title: 支払い情報
+                          editAction: actions.editStep4
+                          items:
+                            - label: 支払い方法
+                              value: $paymentMethodLabel
+                            - when: $globals.wizardData.paymentMethod is "credit_card"
+                              then:
+                                - label: カード番号
+                                  value: "**** **** **** " + $globals.wizardData.cardNumber.slice(-4)
+                            - label: 請求先
+                              value: $globals.wizardData.billingEmail
+
+                  - Divider
+
+                  # 利用規約同意
+                  - FormControlLabel:
+                      control:
+                        - Checkbox:
+                            checked: $agreedToTerms
+                            on:change: set($agreedToTerms, $event.target.checked)
+                      label: |
+                        利用規約およびプライバシーポリシーに同意します
+
+                  - Divider
+
+                  - Stack:
+                      direction: row
+                      justifyContent: space-between
+                      children:
+                        - Button:
+                            label: 戻る
+                            variant: text
+                            startIcon: arrow_back
+                            on:click: actions.goBack
+
+                        - Button:
+                            label: 申し込む
+                            variant: contained
+                            color: primary
+                            size: large
+                            disabled: not($canSubmit)
+                            loading: $submitting
+                            on:click: actions.submit
+
+    actions:
+      # ★ SBPの強み: 各ステップへの編集遷移
+      editStep1:
+        steps:
+          - set: $globals.currentStep = 1
+          - navigate: Step1AccountType
+
+      editStep2:
+        steps:
+          - set: $globals.currentStep = 2
+          - when: $globals.wizardData.accountType is "personal"
+            then:
+              - navigate: Step2Personal
+            else:
+              - navigate: Step2Corporate
+
+      editStep3:
+        steps:
+          - set: $globals.currentStep = 3
+          - navigate: Step3Plan
+
+      editStep4:
+        steps:
+          - set: $globals.currentStep = 4
+          - navigate: Step4Payment
+
+      goBack:
+        steps:
+          - when: $globals.wizardData.plan is "free"
+            then:
+              - set: $globals.currentStep = 3
+              - navigate: Step3Plan
+            else:
+              - set: $globals.currentStep = 4
+              - navigate: Step4Payment
+
+      submit:
+        steps:
+          - set: $submitting = true
+          - do: api.signup($globals.wizardData)
+          - set: $submitting = false
+          - when: success
+            then:
+              - set: $globals.currentStep = 6
+              - navigate: Step6Complete
+          - when: failure
+            then:
+              - toast: error("申し込みに失敗しました: " + $error.message)
+
+  # ----------------------------------------------------------
+  # Step6: 完了画面
+  # ----------------------------------------------------------
+  Step6Complete:
+    title: 申し込み完了
+    description: 申し込み完了画面
+
+    route: /signup/complete
+
+    # 完了画面からは戻れない
+    guard:
+      when: $globals.currentStep < 6
+      redirect: Step1AccountType
+
+    computed:
+      selectedPlanInfo:
+        expr: |
+          $constants.plans find by item.id equals $globals.wizardData.plan
+
+    layout:
+      - Box:
+          display: flex
+          flexDirection: column
+          alignItems: center
+          padding: 6
+          children:
+            - Icon:
+                name: check_circle
+                color: success
+                size: 80
+
+            - Typography:
+                variant: h4
+                marginTop: 3
+                content: お申し込みありがとうございます
+
+            - Typography:
+                variant: body1
+                color: textSecondary
+                marginTop: 2
+                align: center
+                content: |
+                  ご登録いただいたメールアドレスに確認メールをお送りしました。
+                  メール内のリンクをクリックして、アカウントを有効化してください。
+
+            - Card:
+                marginTop: 4
+                children:
+                  - Stack:
+                      direction: column
+                      spacing: 2
+                      padding: 3
+                      children:
+                        - Typography:
+                            variant: h6
+                            content: 申し込み内容
+
+                        - Stack:
+                            direction: row
+                            justifyContent: space-between
+                            children:
+                              - Typography:
+                                  content: プラン
+                              - Typography:
+                                  fontWeight: bold
+                                  content: $selectedPlanInfo.name
+
+                        - Stack:
+                            direction: row
+                            justifyContent: space-between
+                            children:
+                              - Typography:
+                                  content: メールアドレス
+                              - Typography:
+                                  content: $globals.wizardData.email
+
+            - Button:
+                label: ログイン画面へ
+                variant: contained
+                size: large
+                marginTop: 4
+                on:click: |
+                  # ウィザードデータをクリアしてログインへ
+                  set($globals.wizardData, null)
+                  set($globals.currentStep, 1)
+                  navigate(/login)
+
+# ============================================================
+# カスタムコンポーネント定義
+# ============================================================
+components:
+  WizardHeader:
+    description: ウィザードのステップ表示ヘッダー
+    props:
+      currentStep:
+        type: number
+        required: true
+      totalSteps:
+        type: number
+        required: true
+      title:
+        type: string
+        required: true
+    render:
+      - Box:
+          marginBottom: 4
+          children:
+            - Stepper:
+                activeStep: $props.currentStep - 1
+                children:
+                  - Step:
+                      label: 種別選択
+                  - Step:
+                      label: 基本情報
+                  - Step:
+                      label: プラン
+                  - Step:
+                      label: 支払い
+                  - Step:
+                      label: 確認
+
+  SelectableCard:
+    description: 選択可能なカード
+    props:
+      selected:
+        type: boolean
+        required: true
+      icon:
+        type: string
+        required: true
+      title:
+        type: string
+        required: true
+      description:
+        type: string
+        required: true
+    events:
+      onClick: action
+    render:
+      - Card:
+          variant: outlined
+          sx:
+            cursor: pointer
+            borderColor: |
+              when $props.selected
+                then "primary.main"
+                else "divider"
+            borderWidth: |
+              when $props.selected
+                then 2
+                else 1
+            backgroundColor: |
+              when $props.selected
+                then "primary.50"
+                else "background.paper"
+          on:click: $props.onClick
+          children:
+            - CardContent:
+                children:
+                  - Stack:
+                      direction: column
+                      alignItems: center
+                      spacing: 2
+                      children:
+                        - Icon:
+                            name: $props.icon
+                            size: large
+                            color: |
+                              when $props.selected
+                                then "primary"
+                                else "action"
+
+                        - Typography:
+                            variant: h6
+                            content: $props.title
+
+                        - Typography:
+                            variant: body2
+                            color: textSecondary
+                            align: center
+                            content: $props.description
+
+  PlanCard:
+    description: プラン選択カード
+    props:
+      plan:
+        type: PlanInfo
+        required: true
+      selected:
+        type: boolean
+        required: true
+    events:
+      onSelect: action
+    render:
+      - Card:
+          variant: outlined
+          sx:
+            height: "100%"
+            cursor: pointer
+            borderColor: |
+              when $props.selected
+                then "primary.main"
+                else "divider"
+            borderWidth: |
+              when $props.selected
+                then 2
+                else 1
+            position: relative
+          on:click: $props.onSelect
+          children:
+            # おすすめバッジ
+            - when: $props.plan.recommended
+              then:
+                - Chip:
+                    label: おすすめ
+                    color: primary
+                    size: small
+                    sx:
+                      position: absolute
+                      top: -12
+                      right: 16
+
+            - CardContent:
+                children:
+                  - Stack:
+                      direction: column
+                      spacing: 2
+                      children:
+                        - Typography:
+                            variant: h6
+                            align: center
+                            content: $props.plan.name
+
+                        - Typography:
+                            variant: h4
+                            align: center
+                            color: primary
+                            content: |
+                              when $props.plan.price equals 0
+                                then "無料"
+                                else "¥" + $props.plan.price
+
+                        - when: $props.plan.price > 0
+                          then:
+                            - Typography:
+                                variant: caption
+                                align: center
+                                color: textSecondary
+                                content: "/" + $props.plan.priceUnit
+
+                        - Divider
+
+                        - Stack:
+                            direction: column
+                            spacing: 1
+                            children:
+                              - each: $props.plan.features
+                                as: feature
+                                render:
+                                  - Stack:
+                                      direction: row
+                                      spacing: 1
+                                      alignItems: center
+                                      children:
+                                        - Icon:
+                                            name: check
+                                            size: small
+                                            color: success
+                                        - Typography:
+                                            variant: body2
+                                            content: $feature
+
+  ConfirmSection:
+    description: 確認画面のセクション
+    props:
+      title:
+        type: string
+        required: true
+      items:
+        type: array
+        required: true
+      editAction:
+        type: action
+    render:
+      - Box:
+          children:
+            - Stack:
+                direction: row
+                justifyContent: space-between
+                alignItems: center
+                marginBottom: 2
+                children:
+                  - Typography:
+                      variant: h6
+                      content: $props.title
+
+                  - when: $props.editAction is not empty
+                    then:
+                      - Button:
+                          label: 編集
+                          variant: text
+                          size: small
+                          startIcon: edit
+                          on:click: $props.editAction
+
+            - Stack:
+                direction: column
+                spacing: 1
+                children:
+                  - each: $props.items
+                    as: item
+                    render:
+                      - Stack:
+                          direction: row
+                          justifyContent: space-between
+                          children:
+                            - Typography:
+                                variant: body2
+                                color: textSecondary
+                                content: $item.label
+
+                            - Typography:
+                                variant: body2
+                                content: $item.value
+
+# ============================================================
+# 画面遷移定義
+# ============================================================
+flows:
+  SignupWizard:
+    description: サービス申込ウィザードの遷移フロー
+
+    initial: Step1AccountType
+
+    screens:
+      - Step1AccountType
+      - Step2Personal
+      - Step2Corporate
+      - Step3Plan
+      - Step4Payment
+      - Step5Confirm
+      - Step6Complete
+
+    transitions:
+      # Step1 → Step2（分岐）
+      - from: Step1AccountType
+        to: Step2Personal
+        when: $globals.wizardData.accountType is "personal"
+
+      - from: Step1AccountType
+        to: Step2Corporate
+        when: $globals.wizardData.accountType is "corporate"
+
+      # Step2 → Step3
+      - from: [Step2Personal, Step2Corporate]
+        to: Step3Plan
+
+      # Step3 → Step4 or Step5（分岐）
+      - from: Step3Plan
+        to: Step4Payment
+        when: $globals.wizardData.plan is not "free"
+
+      - from: Step3Plan
+        to: Step5Confirm
+        when: $globals.wizardData.plan is "free"
+
+      # Step4 → Step5
+      - from: Step4Payment
+        to: Step5Confirm
+
+      # Step5 → Step6
+      - from: Step5Confirm
+        to: Step6Complete
+
+    # ★ SBPの強み: 途中離脱時の確認
+    guards:
+      - on: browserBack
+        when: $globals.currentStep > 1 and $globals.currentStep < 6
+        confirm:
+          title: 入力を破棄しますか？
+          message: 入力した内容は保存されません。本当に戻りますか？
+          confirmLabel: 破棄する
+          cancelLabel: 入力を続ける
