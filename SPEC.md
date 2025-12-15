@@ -1,6 +1,8 @@
-# Screen Behavior Protocol (SBP) v0.3.1
+# Screen Behavior Protocol (SBP) v0.4.0
 
 **画面の構造・状態・遷移を記述するための設計ドキュメント形式**
+
+> **v0.4.0 破壊的変更**: JS式を完全廃止し、自然言語式に統一。MUIコンポーネントベースの型定義を導入。
 
 ---
 
@@ -148,7 +150,7 @@ screens:
 ## ドキュメント構造
 
 ```yaml
-sbp: "0.3.0"                     # プロトコルバージョン（必須）
+sbp: "0.4.0"                     # プロトコルバージョン（必須）
 
 meta:                            # メタデータ
   name: "アプリケーション名"
@@ -201,6 +203,313 @@ flows:                           # 画面遷移定義
 | **Reference** | 状態や値への参照 | `$users`, `$form.valid` |
 | **Token** | デザインの基本値（色、間隔など） | `$colors.primary` |
 | **Persist** | 状態の永続化先 | `localStorage`, `sessionStorage` |
+| **Modal** | 画面上に重ねて表示されるダイアログ（インライン定義必須） | 削除確認、フォーム入力 |
+| **Drawer** | 画面端からスライドして表示されるパネル（インライン定義必須） | サイドメニュー、設定パネル |
+
+---
+
+## MUIコンポーネント型定義
+
+SBPはMaterial-UI (MUI) のコンポーネント名とプロパティをベースにする。各コンポーネントで使用可能なプロパティは以下の通り。
+
+### レイアウトコンポーネント
+
+```yaml
+Box:
+  props:
+    display: flex | block | grid | none
+    flexDirection: row | column | row-reverse | column-reverse
+    justifyContent: flex-start | center | flex-end | space-between | space-around
+    alignItems: flex-start | center | flex-end | stretch | baseline
+    flexGrow: number
+    flexShrink: number
+    gap: number
+    padding: number
+    margin: number
+    marginTop: number
+    marginBottom: number
+    marginLeft: number
+    marginRight: number
+    width: number | string
+    height: number | string
+    minWidth: number | string
+    maxWidth: number | string
+    minHeight: number | string
+    overflow: auto | hidden | scroll | visible
+
+Stack:
+  props:
+    direction: row | column
+    spacing: number
+    divider: boolean
+    justifyContent: flex-start | center | flex-end | space-between
+    alignItems: flex-start | center | flex-end | stretch
+
+Grid:
+  props:
+    container: boolean
+    item: boolean
+    spacing: number
+    columns: number
+    xs: number  # 1-12
+    sm: number
+    md: number
+    lg: number
+    xl: number
+```
+
+### ナビゲーション・構造コンポーネント
+
+```yaml
+AppBar:
+  props:
+    position: static | fixed | absolute | sticky | relative
+    color: default | inherit | primary | secondary | transparent
+
+Drawer:
+  props:
+    variant: permanent | persistent | temporary
+    anchor: left | right | top | bottom
+    open: boolean
+    width: number
+
+Tabs:
+  props:
+    value: state-reference
+    variant: standard | scrollable | fullWidth
+    centered: boolean
+  events:
+    onChange: action
+
+Tab:
+  props:
+    label: string
+    value: string
+    disabled: boolean
+    icon: icon-name
+```
+
+### 入力コンポーネント
+
+```yaml
+Button:
+  props:
+    variant: contained | outlined | text
+    color: primary | secondary | error | warning | info | success | inherit
+    size: small | medium | large
+    disabled: boolean
+    fullWidth: boolean
+    startIcon: icon-name
+    endIcon: icon-name
+  events:
+    onClick: action
+
+IconButton:
+  props:
+    color: primary | secondary | error | default | inherit
+    size: small | medium | large
+    disabled: boolean
+    edge: start | end | false
+  events:
+    onClick: action
+
+TextField:
+  props:
+    variant: outlined | filled | standard
+    label: string
+    placeholder: string
+    type: text | password | email | number | tel
+    value: state-reference
+    required: boolean
+    disabled: boolean
+    error: boolean
+    helperText: string
+    multiline: boolean
+    rows: number
+    maxLength: number
+    fullWidth: boolean
+  events:
+    onChange: action
+    onBlur: action
+
+Select:
+  props:
+    label: string
+    value: state-reference
+    disabled: boolean
+    multiple: boolean
+    fullWidth: boolean
+  events:
+    onChange: action
+
+Switch:
+  props:
+    checked: boolean
+    disabled: boolean
+    color: primary | secondary | default
+  events:
+    onChange: action
+
+Checkbox:
+  props:
+    checked: boolean
+    disabled: boolean
+    indeterminate: boolean
+  events:
+    onChange: action
+
+RadioGroup:
+  props:
+    value: state-reference
+    row: boolean
+  events:
+    onChange: action
+```
+
+### 表示コンポーネント
+
+```yaml
+Typography:
+  props:
+    variant: h1 | h2 | h3 | h4 | h5 | h6 | subtitle1 | subtitle2 | body1 | body2 | caption | overline
+    color: primary | secondary | textPrimary | textSecondary | error
+    align: left | center | right | justify
+    noWrap: boolean
+
+Chip:
+  props:
+    label: string
+    variant: filled | outlined
+    color: default | primary | secondary | error | warning | info | success
+    size: small | medium
+    onDelete: action
+
+Alert:
+  props:
+    severity: error | warning | info | success
+    variant: standard | filled | outlined
+
+Paper:
+  props:
+    elevation: number  # 0-24
+    variant: elevation | outlined
+    square: boolean
+
+Card:
+  props:
+    variant: elevation | outlined
+    raised: boolean
+```
+
+### テーブルコンポーネント
+
+```yaml
+Table:
+  props:
+    size: small | medium
+    stickyHeader: boolean
+
+TableHead:
+  # ヘッダー行を含む
+
+TableBody:
+  # データ行を含む
+
+TableRow:
+  props:
+    selected: boolean
+    hover: boolean
+  events:
+    onClick: action
+
+TableCell:
+  props:
+    align: left | center | right
+    padding: normal | checkbox | none
+```
+
+### フィードバックコンポーネント
+
+```yaml
+Modal:
+  props:
+    open: boolean
+    title: string
+    size: xs | sm | md | lg | xl | fullscreen
+    closable: boolean
+    closeOnBackdrop: boolean
+
+Dialog:
+  props:
+    open: boolean
+    fullWidth: boolean
+    maxWidth: xs | sm | md | lg | xl | false
+
+Snackbar:
+  props:
+    open: boolean
+    autoHideDuration: number
+    anchorOrigin:
+      vertical: top | bottom
+      horizontal: left | center | right
+```
+
+### リストコンポーネント
+
+```yaml
+List:
+  props:
+    dense: boolean
+    disablePadding: boolean
+
+ListItem:
+  props:
+    button: boolean
+    selected: boolean
+    disabled: boolean
+    divider: boolean
+
+ListItemButton:
+  props:
+    selected: boolean
+    disabled: boolean
+  events:
+    onClick: action
+
+ListItemText:
+  props:
+    primary: string
+    secondary: string
+```
+
+### その他コンポーネント
+
+```yaml
+Divider:
+  props:
+    orientation: horizontal | vertical
+    variant: fullWidth | inset | middle
+    light: boolean
+
+Stepper:
+  props:
+    activeStep: number
+    orientation: horizontal | vertical
+    alternativeLabel: boolean
+
+Accordion:
+  props:
+    expanded: boolean
+    disabled: boolean
+  events:
+    onChange: action
+
+Tooltip:
+  props:
+    title: string
+    placement: top | bottom | left | right
+    arrow: boolean
+```
 
 ---
 
@@ -999,11 +1308,239 @@ layout:
     height: number | string | "auto"
     padding: number | token
     margin: number | token
+    position: static | relative | absolute | fixed | sticky
+    flex: number                # flexアイテムとしての伸縮比率
+    flexGrow: number            # 伸びる比率
+    flexShrink: number          # 縮む比率
     children: [...]
 
 # スペーサー
 - Spacer                        # flex: 1 で残り空間を埋める
 ```
+
+### position プロパティと影響
+
+`position` プロパティは要素の配置方法を指定する。特に `fixed` は注意が必要：
+
+| 値 | 説明 | 影響 |
+|----|------|------|
+| `static` | 通常フロー（デフォルト） | なし |
+| `relative` | 通常フロー + オフセット可能 | なし |
+| `absolute` | 最寄りの relative/absolute 親基準 | 通常フローから外れる |
+| `fixed` | ビューポート基準で固定 | **通常フローから外れる** |
+| `sticky` | スクロールで固定される | 親の範囲内で固定 |
+
+**重要**: `position: fixed` を持つコンポーネント（AppBar等）の**下に配置される要素**は、その高さ分のマージンまたはパディングが必要：
+
+```yaml
+# AppBar（固定ヘッダー）の下にコンテンツを配置する場合
+layout:
+  - AppBar:
+      position: fixed
+      height: 64px           # 明示的に高さを指定
+      children: [...]
+
+  # メインコンテンツには AppBar の高さ分のオフセットが必要
+  - Box:
+      marginTop: 64px        # AppBar の高さと一致させる
+      children: [...]
+```
+
+### オーバーレイコンポーネント（Modal / Drawer）
+
+Modal（モーダル）やDrawer（ドロワー）は、**必ずトリガーとなるコンポーネントと同じlayout内にインラインで定義する**。
+これにより、YAMLの構造がそのまま親子関係を表し、実装漏れを防ぐ。
+
+```yaml
+layout:
+  # === 基本的なModal ===
+  - Button:
+      label: 削除
+      on:click: set($showDeleteConfirm, true)
+
+  - Modal:
+      open: $showDeleteConfirm
+      title: 削除の確認
+      children:
+        - Text:
+            content: 本当に削除しますか？
+        - Stack:
+            direction: horizontal
+            children:
+              - Button:
+                  label: キャンセル
+                  on:click: set($showDeleteConfirm, false)
+              - Button:
+                  label: 削除
+                  variant: danger
+                  on:click: actions.delete
+
+  # === ネストしたModal/Drawer ===
+  # ドロワー → モーダル → モーダル の3層ネストも
+  # YAMLの構造として表現する
+  - IconButton:
+      icon: settings
+      on:click: set($settingsOpen, true)
+
+  - Drawer:
+      open: $settingsOpen
+      anchor: right
+      children:
+        - Text:
+            content: 設定
+        - Button:
+            label: アカウント削除
+            variant: danger
+            on:click: set($deleteConfirmOpen, true)
+
+        # Drawerの中にModalをネスト
+        - Modal:
+            open: $deleteConfirmOpen
+            title: アカウント削除
+            children:
+              - Text:
+                  content: DELETEと入力してください
+              - TextField:
+                  bind: $confirmText
+              - Button:
+                  label: 最終確認へ
+                  disabled: $confirmText != "DELETE"
+                  on:click: set($twoFactorOpen, true)
+
+              # さらにModalをネスト
+              - Modal:
+                  open: $twoFactorOpen
+                  title: 二要素認証
+                  children:
+                    - TextField:
+                        label: 認証コード
+                        bind: $authCode
+                    - Button:
+                        label: 削除を実行
+                        on:click: actions.deleteAccount
+```
+
+**重要な規則**:
+
+1. **インライン定義のみ**: Modal/Drawerは別セクションに分離せず、トリガー元と同じlayout内に書く
+2. **構造=親子関係**: YAMLのネスト構造がそのままオーバーレイのスタック順序を表す
+3. **状態はローカル**: `open`に使う状態（`$showDeleteConfirm`など）は同じscreen/componentのstateで定義
+4. **閉じる責務**: 各Modal/Drawerは自身を閉じるボタンを持つ（親が閉じると子も閉じる）
+
+この規則により、「どのコンテキストでどのオーバーレイが開くか」が構造として明確になり、実装時の漏れを防ぐ。
+
+### Modal プロパティ
+
+| プロパティ | 説明 | 必須 |
+|-----------|------|------|
+| `open` | 表示状態（boolean参照） | ✓ |
+| `title` | タイトル | |
+| `size` | サイズ（sm, md, lg, fullscreen） | |
+| `closable` | 閉じるボタンを表示（デフォルト: true） | |
+| `closeOnBackdrop` | 背景クリックで閉じる（デフォルト: true） | |
+| `children` | コンテンツ | ✓ |
+
+### Drawer プロパティ
+
+| プロパティ | 説明 | 必須 |
+|-----------|------|------|
+| `open` | 表示状態（boolean参照）※variantがtemporaryの場合のみ必要 | |
+| `variant` | 表示モード（下表参照） | |
+| `anchor` | 出現位置（left, right, top, bottom） | |
+| `width` | 幅（anchor=left/rightの場合） | |
+| `height` | 高さ（anchor=top/bottomの場合） | |
+| `children` | コンテンツ | ✓ |
+
+#### Drawer variant（表示モード）
+
+| variant | 説明 | レイアウトへの影響 |
+|---------|------|-------------------|
+| `temporary` | オーバーレイとして表示（デフォルト） | 隣接要素に影響なし |
+| `permanent` | 常に表示、閉じることができない | **隣接要素を押しのける**（固定幅を確保） |
+| `persistent` | トグル可能、開くと隣接要素を押しのける | 開閉に応じて隣接要素が移動 |
+
+**重要**: `variant: permanent` の Drawer は、隣接するコンテンツに対して固定幅を確保する。
+親要素は `display: flex` で横並びにする必要がある：
+
+```yaml
+# サイドバー（permanent Drawer）+ メインコンテンツの構成
+layout:
+  - Flex:
+      direction: row
+      height: 100vh
+      children:
+        # 固定幅のサイドバー
+        - Drawer:
+            variant: permanent
+            width: 240px
+            children: [...]
+
+        # 残りの幅を埋めるメインコンテンツ
+        - Box:
+            flex: 1              # 残り幅を占める
+            children: [...]
+```
+
+### マルチペインレイアウト
+
+固定ヘッダー + サイドバー + メインコンテンツ + 詳細パネルのような複合レイアウトの定義例：
+
+```yaml
+# 3ペイン構成（AppBar + Sidebar + MainContent + DetailPanel）
+layout:
+  # 固定ヘッダー（通常フローから外れる）
+  - AppBar:
+      position: fixed
+      height: 64px
+      zIndex: drawer + 1       # Drawerより上に表示
+      children:
+        - Typography:
+            text: アプリ名
+        - Spacer: {}
+        - IconButton:
+            icon: settings
+
+  # メインエリア（横並び）
+  - Flex:
+      direction: row
+      minHeight: 100vh
+      children:
+        # サイドバー（固定幅、AppBar下にスペーサー）
+        - Drawer:
+            variant: permanent
+            width: 240px
+            children:
+              - Box:
+                  height: 64px       # AppBar分のスペーサー
+              - List:
+                  children: [...]
+
+        # コンテンツエリア（残り幅を分割）
+        - Flex:
+            direction: row
+            flex: 1
+            marginTop: 64px          # AppBar分のオフセット
+            children:
+              # メインコンテンツ（伸縮する）
+              - Box:
+                  flex: 1
+                  padding: 3
+                  children: [...]
+
+              # 詳細パネル（条件付き表示、固定幅）
+              - when: $selectedId != null
+                then:
+                  - Paper:
+                      width: 350px
+                      flexShrink: 0    # 縮まない
+                      children: [...]
+```
+
+この例の重要なポイント：
+1. **AppBar**: `position: fixed` で固定。`zIndex` で Drawer より上に表示
+2. **Drawer**: `variant: permanent` で常に表示。内部に AppBar 分のスペーサーが必要
+3. **メインエリア**: `marginTop: 64px` で AppBar 分のオフセット
+4. **DetailPanel**: `flexShrink: 0` で縮まないようにする
 
 ### 条件分岐
 
@@ -1305,149 +1842,161 @@ flows:
 
 ---
 
-## 10. Expression（式）
+## 10. Expression（式）- 自然言語構文
+
+SBPでは、プログラミング式ではなく**自然言語に近い構文**を使用する。使用可能な表現は以下に列挙される。
 
 ### 参照構文
 
+状態やプロパティへの参照は `{name}` 形式で記述する。
+
 ```yaml
 # === 状態参照 ===
-$stateName                    # 現在のスコープの状態
-$screen.stateName             # 画面の状態を明示
-$parent.stateName             # 親コンポーネントの状態
-$root.stateName               # ルートの状態
+{stateName}                   # 現在のスコープの状態
+{screen.stateName}            # 画面の状態を明示
+{parent.stateName}            # 親コンポーネントの状態
 
 # === パラメータ ===
-$params.id                    # URLパラメータ
-$params.page
+{params.id}                   # URLパラメータ
+{route.params.id}             # ルートパラメータ
 
 # === イベントデータ ===
-$event                        # イベントオブジェクト全体
-$event.value                  # イベントの値
-$value                        # $event.value のショートカット
+{value}                       # イベントの値（on:change等で使用）
 
 # === 反復変数 ===
-$item                         # each内の現在のアイテム
-$index                        # each内の現在のインデックス
-$row                          # DataTable行のデータ
-$cell                         # DataTableセルの値
+{item}                        # each内の現在のアイテム
+{index}                       # each内の現在のインデックス
+{row}                         # DataTable行のデータ
+{row.fieldName}               # 行の特定フィールド
 
 # === 特殊参照 ===
-$result                       # 直前のcallの結果
-$error                        # エラーオブジェクト
-$currentUser                  # ログインユーザー（グローバル）
+{result}                      # 直前のdoの結果
+{currentUser}                 # ログインユーザー（グローバル）
 
-# === トークン ===
-$tokens.colors.primary
-$tokens.spacing.md
+# === オブジェクトのフィールド ===
+{user.name}                   # ネストしたフィールド
+{user.address.city}           # 深いネスト
 ```
 
-### 演算子
+### 比較演算（使用可能な表現一覧）
+
+| 表現 | 意味 | 例 |
+|------|------|-----|
+| `{field} equals {value}` | 等しい | `name equals "John"` |
+| `{field} equals "{literal}"` | 文字列と等しい | `status equals "active"` |
+| `{field} is not {value}` | 等しくない | `role is not "guest"` |
+| `{field} is empty` | 空である | `email is empty` |
+| `{field} is not empty` | 空でない | `name is not empty` |
+| `{field} contains {value}` | 含む | `email contains "@"` |
+| `length of {field} equals {n}` | 長さが等しい | `length of code equals 6` |
+| `length of {field} is not {n}` | 長さが等しくない | `length of code is not 6` |
+| `{field} greater than {n}` | より大きい | `age greater than 18` |
+| `{field} less than {n}` | より小さい | `count less than 10` |
+| `{field} at least {n}` | 以上 | `score at least 60` |
+| `{field} at most {n}` | 以下 | `items at most 100` |
+
+### 配列操作（使用可能な表現一覧）
+
+| 表現 | 意味 | 例 |
+|------|------|-----|
+| `find in {array} where {field} equals {value}` | 条件に合う最初の要素 | `find in users where id equals {selectedId}` |
+| `filter {array} where {field} equals {value}` | 条件に合う要素の配列 | `filter users where status equals "active"` |
+| `remove from {array} where {field} equals {value}` | 条件に合う要素を除いた配列 | `remove from users where id equals {targetId}` |
+| `count of {array}` | 配列の要素数 | `count of users` |
+| `count of {array} where {condition}` | 条件に合う要素数 | `count of users where status equals "active"` |
+| `first of {array}` | 先頭要素 | `first of items` |
+| `last of {array}` | 末尾要素 | `last of items` |
+
+### 論理演算（YAML構造）
 
 ```yaml
-# === 算術 ===
-$a + $b
-$a - $b
-$a * $b
-$a / $b
-$a % $b
+# AND条件（すべてがtrue）
+all of:
+  - name is not empty
+  - email is not empty
+  - email contains "@"
 
-# === 比較 ===
-$a == $b
-$a != $b
-$a > $b
-$a >= $b
-$a < $b
-$a <= $b
+# OR条件（いずれかがtrue）
+any of:
+  - status equals "admin"
+  - status equals "owner"
 
-# === 論理 ===
-$a && $b
-$a || $b
-not($a)
+# NOT条件
+not: isLoading
 
-# === 文字列 ===
-"Hello, ${$name}!"            # テンプレートリテラル
-$a + $b                       # 文字列結合
-
-# === 配列 ===
-$items.length
-$items[0]
-$items.filter(x => x.active)
-$items.map(x => x.name)
-$items.find(x => x.id == $id)
-$items.some(x => x.active)
-$items.every(x => x.valid)
-$items.includes($value)
-
-# === オブジェクト ===
-$user.name
-$user["property-with-dash"]
-
-# === Null安全 ===
-$user?.name                   # Optional chaining
-$value ?? "default"           # Null合体演算子
-
-# === 三項演算子 ===
-$loading ? "読込中" : "完了"
+# ネストした条件
+all of:
+  - hasSelection
+  - any of:
+      - {currentUser.role} equals "admin"
+      - {currentUser.id} equals {selectedUserId}
 ```
 
-### 組み込み関数
+### 組み込み値
+
+| 表現 | 意味 |
+|------|------|
+| `today` | 今日の日付（YYYY-MM-DD形式） |
+| `now` | 現在時刻（ISO形式） |
+| `new id` | 新規UUID |
+| `new id with prefix "{prefix}"` | プレフィックス付きID（例: `user-xxx`） |
+| `toggle {field}` | 真偽値の反転 |
+
+### 文字列テンプレート
+
+文字列内で参照を埋め込む場合は `{name}` 形式を使用する。
 
 ```yaml
-# === 型変換 ===
-toString($value)
-toNumber($value)
-toBoolean($value)
+text: "{user.name}さん、こんにちは"
+text: "合計: {count of items}件"
+text: "ステータス: {status}"
+```
 
-# === 文字列 ===
-uppercase($str)
-lowercase($str)
-trim($str)
-split($str, ",")
-join($arr, ", ")
-substring($str, 0, 10)
+### 使用例
 
-# === 日付 ===
-formatDate($date, "YYYY/MM/DD")
-formatDateTime($datetime, "YYYY/MM/DD HH:mm")
-now()
-today()
+```yaml
+# computed での使用
+computed:
+  # 単純な参照（find）
+  user: find in users where id equals {selectedUserId}
 
-# === 数値 ===
-round($num)
-floor($num)
-ceil($num)
-abs($num)
-min($a, $b)
-max($a, $b)
+  # フィルター
+  activeUsers: filter users where status equals "active"
 
-# === 配列 ===
-first($arr)
-last($arr)
-take($arr, 5)
-skip($arr, 10)
-sort($arr, "name")
-sortDesc($arr, "createdAt")
-unique($arr)
-flatten($arr)
-groupBy($arr, "category")
+  # カウント
+  activeCount: count of users where status equals "active"
 
-# === オブジェクト ===
-keys($obj)
-values($obj)
-entries($obj)
-pick($obj, ["a", "b"])
-omit($obj, ["password"])
-merge($obj1, $obj2)
+  # 複合条件
+  canDelete:
+    all of:
+      - selectedIds is not empty
+      - {currentUser.role} equals "admin"
 
-# === 条件 ===
-if($condition, $then, $else)
-isEmpty($value)
-isNotEmpty($value)
-isDefined($value)
+  # 空チェック
+  hasUsers: users is not empty
 
-# === その他 ===
-uuid()                        # ユニークID生成
-debug($value)                 # コンソール出力（開発用）
+  # 比較
+  isConfirmed: confirmText equals "DELETE"
+
+# layout での使用
+layout:
+  # 条件分岐
+  - when: loading
+    then: Spinner
+
+  - when: {activeTab} equals "list"
+    then: UserListTab
+
+  - when: selectedUserId is not empty
+    then: DetailPanel
+
+  # disabled条件
+  - Button:
+      text: 次へ
+      disabled:
+        any of:
+          - name is empty
+          - email is empty
 ```
 
 ---
@@ -1764,6 +2313,8 @@ SBPドキュメントの検証ルール。
 | `switch: value` / `cases:` | マッチ分岐 |
 | `each: array` / `render:` | 繰り返し |
 | `on:event: action` | イベントハンドラ |
+| `- Modal: { open, children }` | モーダル（インライン定義必須） |
+| `- Drawer: { open, anchor, children }` | ドロワー（インライン定義必須） |
 
 ### Component定義
 
@@ -1801,7 +2352,46 @@ SBPドキュメントの検証ルール。
 
 ## 変更履歴
 
-### v0.3.1 (現在)
+### v0.4.0 (現在) - 破壊的変更
+
+- **MUIコンポーネント型定義を導入**
+  - 各コンポーネントで使用可能なプロパティをenumで定義
+  - Button, TextField, AppBar, Drawer など主要コンポーネントの型を明記
+- **自然言語式に統一（JS式の完全廃止）**
+  - `$users.filter(u => u.status == 'active')` → `filter users where status equals "active"`
+  - `$confirmText == "DELETE"` → `confirmText equals "DELETE"`
+  - `$name.trim() != ""` → `name is not empty`
+- **参照構文の変更**
+  - `$variableName` → `{variableName}` 形式に統一
+- **使用可能な表現を明確に列挙**
+  - 比較演算: `equals`, `is not`, `is empty`, `contains`, `greater than` など
+  - 配列操作: `find in ... where`, `filter ... where`, `count of`, `remove from ... where`
+  - 論理演算: `all of`, `any of`, `not` (YAML構造)
+  - 組み込み値: `today`, `now`, `new id`, `toggle`
+- **後方互換性なし**
+  - 旧形式のJS式はサポートしない
+
+### v0.3.3
+
+- **レイアウトプロパティの拡充**
+  - Boxに `position`, `flex`, `flexGrow`, `flexShrink` プロパティを追加
+  - `position` プロパティの影響（特に `fixed`）を明文化
+  - AppBar等の固定要素使用時のオフセット指定パターンを追加
+- **Drawer variant の追加**
+  - `temporary`, `permanent`, `persistent` の3種類を定義
+  - 各variantがレイアウトに与える影響を明記
+- **マルチペインレイアウトのパターンを追加**
+  - AppBar + Sidebar + MainContent + DetailPanel の複合レイアウト例
+
+### v0.3.2
+
+- **オーバーレイコンポーネント（Modal/Drawer）セクションを追加**
+  - Modal/Drawerは必ずlayout内にインライン定義する規則を明記
+  - ネストしたModal/Drawerの書き方を例示
+  - 「構造=親子関係」の原則により実装漏れを防ぐ
+- Layout構文にModal/Drawerを追加
+
+### v0.3.1
 
 - 「Progressive Detail」セクションを「省略可能なフィールド」に変更
   - YAMLではマージされないことを明記
