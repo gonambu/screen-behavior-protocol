@@ -418,7 +418,7 @@ state:
 1. **定型処理のカプセル化**: values, errors, touched, dirty, validなどを自動提供
 2. **バリデーション統合**: フィールド定義と検証ルールを一体化
 3. **参照の簡潔さ**: `$form.values.name`, `$form.errors.name`で一貫したアクセス
-4. **実装マッピング**: React Hook Form、Formik等へのマッピングが容易
+4. **実装への変換容易性**: AIがReact Hook Form、Formik等への適切な実装を推論可能
 
 ---
 

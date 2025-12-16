@@ -118,8 +118,8 @@ on:click: navigate(UserDetail, { id: row.id })
 # NG: <MuiTextField>, <input className="...">
 ```
 
-- 抽象的なコンポーネント名を使用
-- マッピングファイルで具象実装に変換
+- 抽象的なコンポーネント名を使用（Button, TextField, Dialog等）
+- AIが文脈から適切なフレームワーク実装に変換可能
 
 ### 4. 省略可能なフィールド
 
@@ -2143,10 +2143,8 @@ project/
 │   │   └── edit.sbp.yaml
 │   └── dashboard/
 │       └── index.sbp.yaml
-├── flows/
-│   └── user-management.yaml   # 画面遷移定義
-└── mappings/
-    └── mui.yaml               # MUIマッピング
+└── flows/
+    └── user-management.yaml   # 画面遷移定義
 ```
 
 ---

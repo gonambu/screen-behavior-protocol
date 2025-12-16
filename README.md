@@ -111,7 +111,7 @@ YAMLで記述し、**人間が読んで理解できる**ことを最優先にし
     ...
 ```
 
-実際のフレームワークへの変換は「マッピングファイル」で定義します。
+AIはButton、TextField等の抽象コンポーネント名から、指定されたフレームワーク（MUI、Chakra UI、Vuetify等）の適切な実装を推論できます。
 
 ### 4. Progressive Detail
 
@@ -275,12 +275,6 @@ layout:
 | [examples/todo-app/](./examples/todo-app/) | プロジェクト・タグ管理付きToDoアプリ |
 | [examples/slack-like-chat/](./examples/slack-like-chat/) | Slackライクなチャットアプリ |
 
-## マッピング
-
-| ファイル | 対象 |
-|----------|------|
-| [mappings/mui.yaml](./mappings/mui.yaml) | MUI (Material UI) |
-
 ---
 
 ## 想定ワークフロー
@@ -324,8 +318,7 @@ SBP → AI生成/手動実装 → コードレビュー
 
 - 仕様へのフィードバック
 - サンプルの追加
-- マッピング定義の追加（Vue、Flutter等）
-- ツール実装（パーサー、バリデーター、コード生成器）
+- ツール実装（パーサー、バリデーター）
 
 ---
 
