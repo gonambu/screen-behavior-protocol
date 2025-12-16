@@ -224,5 +224,5 @@ N=1ではありますが振る舞いに関してはこのくらいの複雑さ�
 
 ---
 
-検証用SBP: [examples/dashboard/dashboard.sbp.yaml](../../examples/dashboard/dashboard.sbp.yaml)
-生成されたコード: [examples/dashboard/implementation/](../../examples/dashboard/implementation/)
+検証用SBP: https://github.com/gonambu/screen-behavior-protocol/blob/6752f9a/examples/dashboard/dashboard.sbp.yaml
+生成されたコード: https://github.com/gonambu/screen-behavior-protocol/tree/6752f9a/examples/dashboard/implementation
