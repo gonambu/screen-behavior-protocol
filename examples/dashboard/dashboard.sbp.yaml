@@ -1,0 +1,1036 @@
+# ============================================================
+# Analytics Dashboard - SBP v0.4.0 サンプル
+# ============================================================
+# 分析ダッシュボード - SBP検証用
+# 複雑な動作・遷移を含む画面のサンプル
+# ============================================================
+
+sbp: "0.4.0"
+
+meta:
+  name: 分析ダッシュボード
+  description: SBP検証用の分析ダッシュボード
+  version: "1.0.0"
+
+# ============================================================
+# 型定義
+# ============================================================
+types:
+  Notification:
+    id: string
+    title: string
+    message: string
+    read: boolean
+    createdAt: datetime
+
+  DataItem:
+    id: string
+    name: string
+    value: number
+    status: DataItemStatus
+    updatedAt: datetime
+
+  DataItemStatus:
+    enum: [active, inactive, pending]
+    labels:
+      active: 有効
+      inactive: 無効
+      pending: 保留
+
+  ToastType:
+    enum: [success, error]
+
+  Toast:
+    message: string
+    type: ToastType
+
+  DataItemForm:
+    name: string
+    value: number
+    status: DataItemStatus
+
+# ============================================================
+# 画面定義
+# ============================================================
+screens:
+  # ==========================================================
+  # ダッシュボード画面（メイン）
+  # ==========================================================
+  Dashboard:
+    title: ダッシュボード
+    description: メインダッシュボード画面。タブで概要/売上/ユーザーを切り替え
+    route: /dashboard
+
+    state:
+      # ドロワー
+      drawerOpen:
+        type: boolean
+        initial: true
+
+      # ヘッダー
+      notificationOpen:
+        type: boolean
+        initial: false
+      userMenuOpen:
+        type: boolean
+        initial: false
+      notifications:
+        type: Notification[]
+        source: external
+
+      # タブ
+      activeTab:
+        type: string
+        initial: "overview"
+
+    computed:
+      unreadCount:
+        count: $notifications
+        where: not read
+
+    layout:
+      - Box:
+          display: flex
+          height: "100vh"
+
+          children:
+            # サイドドロワー
+            - Drawer:
+                open: $drawerOpen
+                variant: persistent
+                width: 240
+
+                children:
+                  - Box:
+                      padding: 2
+                      children:
+                        - Typography:
+                            variant: h6
+                            content: "Analytics"
+
+                  - List:
+                      children:
+                        - ListItem:
+                            selected: true
+                            children:
+                              - ListItemIcon:
+                                  icon: Dashboard
+                              - ListItemText:
+                                  primary: "ダッシュボード"
+
+                        - ListItem:
+                            on:click: navigate(DataManagement)
+                            children:
+                              - ListItemIcon:
+                                  icon: Storage
+                              - ListItemText:
+                                  primary: "データ管理"
+
+                        - ListItem:
+                            on:click: navigate(Settings)
+                            children:
+                              - ListItemIcon:
+                                  icon: Settings
+                              - ListItemText:
+                                  primary: "設定"
+
+            # メインコンテンツ
+            - Box:
+                flexGrow: 1
+                display: flex
+                flexDirection: column
+
+                children:
+                  # ヘッダー
+                  - AppBar:
+                      position: static
+                      children:
+                        - Toolbar:
+                            children:
+                              - IconButton:
+                                  icon: Menu
+                                  on:click: set $drawerOpen to (not $drawerOpen)
+
+                              - Typography:
+                                  variant: h6
+                                  content: "ダッシュボード"
+                                  sx:
+                                    flexGrow: 1
+
+                              # 通知
+                              - IconButton:
+                                  icon: Notifications
+                                  badge: $unreadCount
+                                  on:click: set $notificationOpen to (not $notificationOpen)
+
+                              - Menu:
+                                  open: $notificationOpen
+                                  onClose: set $notificationOpen to false
+                                  children:
+                                    - for: notification in $notifications
+                                      render:
+                                        - MenuItem:
+                                            on:click: actions.openNotification($notification.id)
+                                            children:
+                                              - Typography:
+                                                  content: $notification.title
+
+                              # ユーザーメニュー
+                              - IconButton:
+                                  icon: AccountCircle
+                                  on:click: set $userMenuOpen to (not $userMenuOpen)
+
+                              - Menu:
+                                  open: $userMenuOpen
+                                  onClose: set $userMenuOpen to false
+                                  children:
+                                    - MenuItem:
+                                        label: "プロフィール"
+                                        on:click: navigate(Profile)
+                                    - MenuItem:
+                                        label: "設定"
+                                        on:click: navigate(Settings)
+                                    - Divider: {}
+                                    - MenuItem:
+                                        label: "ログアウト"
+                                        on:click: actions.logout
+
+                  # タブ
+                  - Tabs:
+                      value: $activeTab
+                      on:change: set $activeTab to {value}
+                      children:
+                        - Tab:
+                            label: "概要"
+                            value: "overview"
+                        - Tab:
+                            label: "売上"
+                            value: "sales"
+                        - Tab:
+                            label: "ユーザー"
+                            value: "users"
+
+                  # コンテンツエリア
+                  - Box:
+                      padding: 3
+                      flexGrow: 1
+                      overflow: auto
+
+                      children:
+                        - match: $activeTab
+                          cases:
+                            overview:
+                              # 概要タブ
+                              - Grid:
+                                  container: true
+                                  spacing: 3
+                                  children:
+                                    - Grid:
+                                        item: true
+                                        xs: 12
+                                        md: 4
+                                        children:
+                                          - Card:
+                                              children:
+                                                - CardContent:
+                                                    children:
+                                                      - Typography:
+                                                          variant: h6
+                                                          content: "売上"
+                                                      - Typography:
+                                                          variant: h4
+                                                          content: "¥1,234,567"
+
+                                    - Grid:
+                                        item: true
+                                        xs: 12
+                                        md: 4
+                                        children:
+                                          - Card:
+                                              children:
+                                                - CardContent:
+                                                    children:
+                                                      - Typography:
+                                                          variant: h6
+                                                          content: "ユーザー数"
+                                                      - Typography:
+                                                          variant: h4
+                                                          content: "5,678"
+
+                                    - Grid:
+                                        item: true
+                                        xs: 12
+                                        md: 4
+                                        children:
+                                          - Card:
+                                              children:
+                                                - CardContent:
+                                                    children:
+                                                      - Typography:
+                                                          variant: h6
+                                                          content: "注文数"
+                                                      - Typography:
+                                                          variant: h4
+                                                          content: "890"
+
+                            sales:
+                              # 売上タブ
+                              - Box:
+                                  children:
+                                    - Typography:
+                                        variant: h5
+                                        content: "売上分析"
+
+                                    - Grid:
+                                        container: true
+                                        spacing: 3
+                                        sx:
+                                          marginTop: 2
+                                        children:
+                                          - Grid:
+                                              item: true
+                                              xs: 12
+                                              md: 6
+                                              children:
+                                                - Card:
+                                                    children:
+                                                      - CardContent:
+                                                          children:
+                                                            - Typography:
+                                                                variant: h6
+                                                                content: "月間売上"
+                                                            - Typography:
+                                                                variant: h3
+                                                                content: "¥12,345,678"
+
+                                          - Grid:
+                                              item: true
+                                              xs: 12
+                                              md: 6
+                                              children:
+                                                - Card:
+                                                    children:
+                                                      - CardContent:
+                                                          children:
+                                                            - Typography:
+                                                                variant: h6
+                                                                content: "前月比"
+                                                            - Typography:
+                                                                variant: h3
+                                                                color: success
+                                                                content: "+15.3%"
+
+                                    - Typography:
+                                        sx:
+                                          marginTop: 3
+                                        content: "売上推移グラフがここに表示されます"
+
+                            users:
+                              # ユーザータブ
+                              - Box:
+                                  children:
+                                    - Typography:
+                                        variant: h5
+                                        content: "ユーザー分析"
+
+                                    - Grid:
+                                        container: true
+                                        spacing: 3
+                                        sx:
+                                          marginTop: 2
+                                        children:
+                                          - Grid:
+                                              item: true
+                                              xs: 12
+                                              md: 4
+                                              children:
+                                                - Card:
+                                                    children:
+                                                      - CardContent:
+                                                          children:
+                                                            - Typography:
+                                                                variant: h6
+                                                                content: "総ユーザー数"
+                                                            - Typography:
+                                                                variant: h3
+                                                                content: "25,678"
+
+                                          - Grid:
+                                              item: true
+                                              xs: 12
+                                              md: 4
+                                              children:
+                                                - Card:
+                                                    children:
+                                                      - CardContent:
+                                                          children:
+                                                            - Typography:
+                                                                variant: h6
+                                                                content: "アクティブ"
+                                                            - Typography:
+                                                                variant: h3
+                                                                content: "8,234"
+
+                                          - Grid:
+                                              item: true
+                                              xs: 12
+                                              md: 4
+                                              children:
+                                                - Card:
+                                                    children:
+                                                      - CardContent:
+                                                          children:
+                                                            - Typography:
+                                                                variant: h6
+                                                                content: "リテンション"
+                                                            - Typography:
+                                                                variant: h3
+                                                                content: "78.5%"
+
+    actions:
+      openNotification:
+        params:
+          id: string
+        steps:
+          - do: "markNotificationRead({ id })"
+          - set: notificationOpen to false
+
+      logout:
+        steps:
+          - do: logout()
+          - navigate: Login
+
+  # ==========================================================
+  # データ管理画面
+  # ==========================================================
+  DataManagement:
+    title: データ管理
+    description: データの一覧表示・編集・削除を行う画面
+    route: /data
+
+    state:
+      # ドロワー
+      drawerOpen:
+        type: boolean
+        initial: true
+
+      # ヘッダー
+      userMenuOpen:
+        type: boolean
+        initial: false
+
+      # データ
+      items:
+        type: DataItem[]
+        source: external
+      selectedItem:
+        type: DataItem?
+        initial: null
+
+      # モーダル
+      editModalOpen:
+        type: boolean
+        initial: false
+      deleteConfirmOpen:
+        type: boolean
+        initial: false
+
+      # 編集フォーム
+      editForm:
+        type: form
+        schema: DataItemForm
+
+      # ローディング・トースト
+      loading:
+        type: boolean
+        initial: false
+      toast:
+        type: Toast?
+        initial: null
+
+    computed:
+      canSaveEdit:
+        all:
+          - $editForm.name is not empty
+          - $editForm.value greater than 0
+
+    layout:
+      - Box:
+          display: flex
+          height: "100vh"
+
+          children:
+            # サイドドロワー
+            - Drawer:
+                open: $drawerOpen
+                variant: persistent
+                width: 240
+
+                children:
+                  - Box:
+                      padding: 2
+                      children:
+                        - Typography:
+                            variant: h6
+                            content: "Analytics"
+
+                  - List:
+                      children:
+                        - ListItem:
+                            on:click: navigate(Dashboard)
+                            children:
+                              - ListItemIcon:
+                                  icon: Dashboard
+                              - ListItemText:
+                                  primary: "ダッシュボード"
+
+                        - ListItem:
+                            selected: true
+                            children:
+                              - ListItemIcon:
+                                  icon: Storage
+                              - ListItemText:
+                                  primary: "データ管理"
+
+                        - ListItem:
+                            on:click: navigate(Settings)
+                            children:
+                              - ListItemIcon:
+                                  icon: Settings
+                              - ListItemText:
+                                  primary: "設定"
+
+            # メインコンテンツ
+            - Box:
+                flexGrow: 1
+                display: flex
+                flexDirection: column
+
+                children:
+                  # ヘッダー
+                  - AppBar:
+                      position: static
+                      children:
+                        - Toolbar:
+                            children:
+                              - IconButton:
+                                  icon: Menu
+                                  on:click: set $drawerOpen to (not $drawerOpen)
+
+                              - Typography:
+                                  variant: h6
+                                  content: "データ管理"
+                                  sx:
+                                    flexGrow: 1
+
+                              - Button:
+                                  startIcon: Add
+                                  variant: contained
+                                  label: "新規作成"
+                                  on:click: |
+                                    set $selectedItem to null
+                                    set $editForm to { name: "", value: 0, status: "active" }
+                                    set $editModalOpen to true
+
+                              # ユーザーメニュー
+                              - IconButton:
+                                  icon: AccountCircle
+                                  on:click: set $userMenuOpen to (not $userMenuOpen)
+
+                              - Menu:
+                                  open: $userMenuOpen
+                                  onClose: set $userMenuOpen to false
+                                  children:
+                                    - MenuItem:
+                                        label: "プロフィール"
+                                        on:click: navigate(Profile)
+                                    - MenuItem:
+                                        label: "設定"
+                                        on:click: navigate(Settings)
+                                    - Divider: {}
+                                    - MenuItem:
+                                        label: "ログアウト"
+                                        on:click: actions.logout
+
+                  # コンテンツエリア
+                  - Box:
+                      padding: 3
+                      flexGrow: 1
+                      overflow: auto
+
+                      children:
+                        # データテーブル
+                        - TableContainer:
+                            children:
+                              - Table:
+                                  children:
+                                    - TableHead:
+                                        children:
+                                          - TableRow:
+                                              children:
+                                                - TableCell:
+                                                    content: "名前"
+                                                - TableCell:
+                                                    content: "値"
+                                                - TableCell:
+                                                    content: "ステータス"
+                                                - TableCell:
+                                                    content: "操作"
+
+                                    - TableBody:
+                                        children:
+                                          - for: item in $items
+                                            render:
+                                              - TableRow:
+                                                  children:
+                                                    - TableCell:
+                                                        content: $item.name
+                                                    - TableCell:
+                                                        content: $item.value
+                                                    - TableCell:
+                                                        children:
+                                                          - Chip:
+                                                              label: $item.status
+                                                              color:
+                                                                match: $item.status
+                                                                cases:
+                                                                  active: success
+                                                                  inactive: default
+                                                                  pending: warning
+                                                    - TableCell:
+                                                        children:
+                                                          - IconButton:
+                                                              icon: Edit
+                                                              on:click: |
+                                                                set $selectedItem to $item
+                                                                set $editForm to { name: $item.name, value: $item.value, status: $item.status }
+                                                                set $editModalOpen to true
+                                                          - IconButton:
+                                                              icon: Delete
+                                                              on:click: |
+                                                                set $selectedItem to $item
+                                                                set $deleteConfirmOpen to true
+
+      # 編集モーダル
+      - Dialog:
+          open: $editModalOpen
+          onClose: set $editModalOpen to false
+          maxWidth: sm
+          fullWidth: true
+          children:
+            - DialogTitle:
+                content:
+                  match: $selectedItem
+                  cases:
+                    null: "新規作成"
+                    _: "編集"
+            - DialogContent:
+                children:
+                  - Stack:
+                      spacing: 2
+                      sx:
+                        marginTop: 1
+                      children:
+                        - TextField:
+                            label: "名前"
+                            value: $editForm.name
+                            on:change: set $editForm.name to {value}
+                            error: $editForm.name is empty
+                            helperText:
+                              when: $editForm.name is empty
+                              then: "名前は必須です"
+
+                        - TextField:
+                            label: "値"
+                            type: number
+                            value: $editForm.value
+                            on:change: set $editForm.value to {value}
+                            error: $editForm.value less than or equal 0
+                            helperText:
+                              when: $editForm.value less than or equal 0
+                              then: "0より大きい値を入力してください"
+
+                        - Select:
+                            label: "ステータス"
+                            value: $editForm.status
+                            on:change: set $editForm.status to {value}
+                            options:
+                              - value: active
+                                label: 有効
+                              - value: inactive
+                                label: 無効
+                              - value: pending
+                                label: 保留
+
+            - DialogActions:
+                children:
+                  - Button:
+                      label: "キャンセル"
+                      on:click: set $editModalOpen to false
+                  - Button:
+                      label: "保存"
+                      variant: contained
+                      disabled: not $canSaveEdit
+                      on:click: actions.saveItem
+
+      # 削除確認ダイアログ
+      - Dialog:
+          open: $deleteConfirmOpen
+          onClose: set $deleteConfirmOpen to false
+          children:
+            - DialogTitle:
+                content: "削除確認"
+            - DialogContent:
+                children:
+                  - Typography:
+                      content: "「{$selectedItem.name}」を削除しますか？この操作は取り消せません。"
+            - DialogActions:
+                children:
+                  - Button:
+                      label: "キャンセル"
+                      on:click: set $deleteConfirmOpen to false
+                  - Button:
+                      label: "削除"
+                      color: error
+                      variant: contained
+                      on:click: actions.deleteItem
+
+      # トースト
+      - Snackbar:
+          open: $toast is not null
+          autoHideDuration: 3000
+          onClose: set $toast to null
+          children:
+            - Alert:
+                severity: $toast.type
+                content: $toast.message
+
+    actions:
+      saveItem:
+        steps:
+          - set: loading to true
+          - do: |
+              match: $selectedItem
+              cases:
+                null: createItem($editForm)
+                _: "updateItem({ id: $selectedItem.id, ...$editForm })"
+          - when: success
+            then:
+              - set: loading to false
+              - set: editModalOpen to false
+              - set:
+                  toast:
+                    message: "保存しました"
+                    type: success
+              - do: refreshItems()
+          - when: failure
+            then:
+              - set: loading to false
+              - set:
+                  toast:
+                    message: "保存に失敗しました"
+                    type: error
+
+      deleteItem:
+        steps:
+          - set: loading to true
+          - do: "deleteItem({ id: $selectedItem.id })"
+          - when: success
+            then:
+              - set: loading to false
+              - set: deleteConfirmOpen to false
+              - set: selectedItem to null
+              - set:
+                  toast:
+                    message: "削除しました"
+                    type: success
+              - do: refreshItems()
+          - when: failure
+            then:
+              - set: loading to false
+              - set:
+                  toast:
+                    message: "削除に失敗しました"
+                    type: error
+
+      logout:
+        steps:
+          - do: logout()
+          - navigate: Login
+
+  # ==========================================================
+  # 設定画面
+  # ==========================================================
+  Settings:
+    title: 設定
+    description: アプリケーション設定画面
+    route: /settings
+
+    state:
+      # ドロワー
+      drawerOpen:
+        type: boolean
+        initial: true
+
+      # ヘッダー
+      userMenuOpen:
+        type: boolean
+        initial: false
+
+      # 設定フォーム
+      notificationsEnabled:
+        type: boolean
+        initial: true
+      emailNotifications:
+        type: boolean
+        initial: true
+      darkMode:
+        type: boolean
+        initial: false
+
+      # トースト
+      toast:
+        type: Toast?
+        initial: null
+
+    layout:
+      - Box:
+          display: flex
+          height: "100vh"
+
+          children:
+            # サイドドロワー
+            - Drawer:
+                open: $drawerOpen
+                variant: persistent
+                width: 240
+
+                children:
+                  - Box:
+                      padding: 2
+                      children:
+                        - Typography:
+                            variant: h6
+                            content: "Analytics"
+
+                  - List:
+                      children:
+                        - ListItem:
+                            on:click: navigate(Dashboard)
+                            children:
+                              - ListItemIcon:
+                                  icon: Dashboard
+                              - ListItemText:
+                                  primary: "ダッシュボード"
+
+                        - ListItem:
+                            on:click: navigate(DataManagement)
+                            children:
+                              - ListItemIcon:
+                                  icon: Storage
+                              - ListItemText:
+                                  primary: "データ管理"
+
+                        - ListItem:
+                            selected: true
+                            children:
+                              - ListItemIcon:
+                                  icon: Settings
+                              - ListItemText:
+                                  primary: "設定"
+
+            # メインコンテンツ
+            - Box:
+                flexGrow: 1
+                display: flex
+                flexDirection: column
+
+                children:
+                  # ヘッダー
+                  - AppBar:
+                      position: static
+                      children:
+                        - Toolbar:
+                            children:
+                              - IconButton:
+                                  icon: Menu
+                                  on:click: set $drawerOpen to (not $drawerOpen)
+
+                              - Typography:
+                                  variant: h6
+                                  content: "設定"
+                                  sx:
+                                    flexGrow: 1
+
+                              # ユーザーメニュー
+                              - IconButton:
+                                  icon: AccountCircle
+                                  on:click: set $userMenuOpen to (not $userMenuOpen)
+
+                              - Menu:
+                                  open: $userMenuOpen
+                                  onClose: set $userMenuOpen to false
+                                  children:
+                                    - MenuItem:
+                                        label: "プロフィール"
+                                        on:click: navigate(Profile)
+                                    - Divider: {}
+                                    - MenuItem:
+                                        label: "ログアウト"
+                                        on:click: actions.logout
+
+                  # コンテンツエリア
+                  - Box:
+                      padding: 3
+                      flexGrow: 1
+                      overflow: auto
+
+                      children:
+                        - Typography:
+                            variant: h5
+                            content: "通知設定"
+
+                        - Card:
+                            sx:
+                              marginTop: 2
+                            children:
+                              - CardContent:
+                                  children:
+                                    - Stack:
+                                        spacing: 2
+                                        children:
+                                          - Box:
+                                              display: flex
+                                              justifyContent: space-between
+                                              alignItems: center
+                                              children:
+                                                - Typography:
+                                                    content: "通知を有効にする"
+                                                - Switch:
+                                                    checked: $notificationsEnabled
+                                                    on:change: set $notificationsEnabled to {value}
+
+                                          - Box:
+                                              display: flex
+                                              justifyContent: space-between
+                                              alignItems: center
+                                              children:
+                                                - Typography:
+                                                    content: "メール通知"
+                                                - Switch:
+                                                    checked: $emailNotifications
+                                                    disabled: not $notificationsEnabled
+                                                    on:change: set $emailNotifications to {value}
+
+                        - Typography:
+                            variant: h5
+                            sx:
+                              marginTop: 4
+                            content: "表示設定"
+
+                        - Card:
+                            sx:
+                              marginTop: 2
+                            children:
+                              - CardContent:
+                                  children:
+                                    - Box:
+                                        display: flex
+                                        justifyContent: space-between
+                                        alignItems: center
+                                        children:
+                                          - Typography:
+                                              content: "ダークモード"
+                                          - Switch:
+                                              checked: $darkMode
+                                              on:change: set $darkMode to {value}
+
+                        - Box:
+                            sx:
+                              marginTop: 4
+                            children:
+                              - Button:
+                                  variant: contained
+                                  label: "設定を保存"
+                                  on:click: actions.saveSettings
+
+      # トースト
+      - Snackbar:
+          open: $toast is not null
+          autoHideDuration: 3000
+          onClose: set $toast to null
+          children:
+            - Alert:
+                severity: $toast.type
+                content: $toast.message
+
+    actions:
+      saveSettings:
+        steps:
+          - do: "saveSettings({ notificationsEnabled: $notificationsEnabled, emailNotifications: $emailNotifications, darkMode: $darkMode })"
+          - when: success
+            then:
+              - set:
+                  toast:
+                    message: "設定を保存しました"
+                    type: success
+          - when: failure
+            then:
+              - set:
+                  toast:
+                    message: "設定の保存に失敗しました"
+                    type: error
+
+      logout:
+        steps:
+          - do: logout()
+          - navigate: Login
+
+# ============================================================
+# 画面遷移定義
+# ============================================================
+flows:
+  MainNavigation:
+    description: メインナビゲーションの画面遷移
+    initial: Dashboard
+
+    screens:
+      - Dashboard
+      - DataManagement
+      - Settings
+
+    transitions:
+      # ダッシュボード → データ管理
+      - from: Dashboard
+        to: DataManagement
+        on: navigateToDataManagement
+
+      # ダッシュボード → 設定
+      - from: Dashboard
+        to: Settings
+        on: navigateToSettings
+
+      # データ管理 → ダッシュボード
+      - from: DataManagement
+        to: Dashboard
+        on: navigateToDashboard
+
+      # データ管理 → 設定
+      - from: DataManagement
+        to: Settings
+        on: navigateToSettings
+
+      # 設定 → ダッシュボード
+      - from: Settings
+        to: Dashboard
+        on: navigateToDashboard
+
+      # 設定 → データ管理
+      - from: Settings
+        to: DataManagement
+        on: navigateToDataManagement
+
+      # どこからでもログアウト
+      - from: "*"
+        to: Login
+        on: logout
