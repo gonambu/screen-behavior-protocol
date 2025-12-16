@@ -147,135 +147,34 @@ SBPの威力を試すため、動作・遷移が複雑な画面を用意しま�
 
 ### ステップ2: SBPでコンポーネント構造を書く
 
-Figmaデザインを元に、AIでSBPのベースを生成：
+Figmaデザインを元に、AIでSBPのベースを生成します。
 
-```yaml
-layout:
-  - Box:
-      display: flex
-      children:
-        - Drawer:
-            children:
-              - List:
-                  children:
-                    - ListItem: { children: [...] }
-        - Box:
-            children:
-              - AppBar: { ... }
-              - Tabs: { ... }
-              - Grid:
-                  children:
-                    - Card: { ... }
-              - Table: { ... }
-```
+MUIコンポーネント（Box, Drawer, AppBar, Tabs, Grid, Card, Table等）を使って画面構造を定義します：
+
+📄 [Dashboard画面のlayout定義（91行目〜）](https://github.com/gonambu/screen-behavior-protocol/blob/9acf84a97f0473c7a0ee54ebbf4ed05724433282/examples/dashboard/dashboard.sbp.yaml#L91-L389)
 
 ### ステップ3: 振る舞いを追記
 
-ここがSBPの本領発揮。Figmaだけでは伝わらない「動き」を定義する。
+ここがSBPの本領発揮。Figmaだけでは伝わらない「動き」を定義します。
 
-ダッシュボード画面の状態：
+**状態定義（state / computed）**
 
-```yaml
-screens:
-  Dashboard:
-    state:
-      drawerOpen:
-        type: boolean
-        initial: true
-      activeTab:
-        type: string
-        initial: "overview"
-      notificationOpen:
-        type: boolean
-        initial: false
+各画面が持つ状態と、それらから導出される派生状態を定義：
 
-    computed:
-      unreadCount:
-        count: $notifications
-        where: not read
-```
+- 📄 [Dashboard画面のstate/computed（64行目〜）](https://github.com/gonambu/screen-behavior-protocol/blob/9acf84a97f0473c7a0ee54ebbf4ed05724433282/examples/dashboard/dashboard.sbp.yaml#L64-L89)
+- 📄 [DataManagement画面のstate/computed（411行目〜）](https://github.com/gonambu/screen-behavior-protocol/blob/9acf84a97f0473c7a0ee54ebbf4ed05724433282/examples/dashboard/dashboard.sbp.yaml#L411-L455)
 
-データ管理画面の状態：
+**アクション定義**
 
-```yaml
-DataManagement:
-  state:
-    editModalOpen:
-      type: boolean
-      initial: false
-    deleteConfirmOpen:
-      type: boolean
-      initial: false
-    selectedItem:
-      type: DataItem | null
-      initial: null
+保存・削除などの操作とその成功/失敗時の振る舞いを定義：
 
-  computed:
-    canSaveEdit:
-      all:
-        - $editForm.name is not empty
-        - $editForm.value greater than 0
-```
+- 📄 [DataManagement画面のactions（708行目〜）](https://github.com/gonambu/screen-behavior-protocol/blob/9acf84a97f0473c7a0ee54ebbf4ed05724433282/examples/dashboard/dashboard.sbp.yaml#L708-L760)
 
-イベントハンドラ：
+**画面遷移定義（flows）**
 
-```yaml
-# サイドナビでページ遷移
-- ListItem:
-    on:click: navigate(DataManagement)
+サイドナビゲーションによるページ間遷移を定義：
 
-# タブ切り替え（ダッシュボード内）
-- Tabs:
-    value: $activeTab
-    on:change: set $activeTab to {value}
-
-# 編集モーダル（データ管理画面）
-- IconButton:
-    icon: Edit
-    on:click: |
-      set $selectedItem to item
-      set $editForm to { name: item.name, value: item.value }
-      set $editModalOpen to true
-```
-
-アクション定義：
-
-```yaml
-actions:
-  saveItem:
-    steps:
-      - set: $loading to true
-      - do: "updateItem({ id: $selectedItem.id, ...$editForm })"
-      - when: success
-        then:
-          - set: $editModalOpen to false
-          - set:
-              $toast:
-                message: "保存しました"
-                type: success
-      - when: failure
-        then:
-          - set:
-              $toast:
-                message: "保存に失敗しました"
-                type: error
-```
-
-ページ遷移の定義：
-
-```yaml
-flows:
-  MainNavigation:
-    initial: Dashboard
-    screens:
-      - Dashboard
-      - DataManagement
-      - Settings
-    transitions:
-      - from: Dashboard
-        to: DataManagement
-        trigger: navigate(DataManagement)
-```
+- 📄 [MainNavigation flow（992行目〜）](https://github.com/gonambu/screen-behavior-protocol/blob/9acf84a97f0473c7a0ee54ebbf4ed05724433282/examples/dashboard/dashboard.sbp.yaml#L992-L1036)
 
 ### ステップ4: Claude Codeでコード生成
 
