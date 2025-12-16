@@ -17,6 +17,8 @@
 SBPは、フロントエンド画面の**振る舞い（状態・遷移・操作）**を構造化テキストで記述するためのプロトコルです。
 
 ```yaml
+sbp: "0.4.0"
+
 screens:
   UserList:
     route: /users
@@ -24,13 +26,37 @@ screens:
       users:
         type: User[]
         source: external
+      loading:
+        type: boolean
+        initial: true
+
+    computed:
+      hasUsers:
+        not empty: $users
+
     layout:
-      - SearchBar:
-          bind: searchQuery
-          on:submit: actions.search
-      - DataTable:
-          data: users
-          on:rowClick: navigate(UserDetail, { id: row.id })
+      - Box:
+          padding: 3
+          children:
+            - TextField:
+                label: "検索"
+                value: $searchQuery
+                on:change: set $searchQuery to $value
+
+            - when: $loading
+              then: CircularProgress
+              else:
+                - Table:
+                    children:
+                      - TableBody:
+                          children:
+                            - for: user in $users
+                              render:
+                                - TableRow:
+                                    on:click: navigate(UserDetail, { id: $user.id })
+                                    children:
+                                      - TableCell:
+                                          content: $user.name
 ```
 
 このYAMLから：
@@ -74,66 +100,70 @@ SBPは「見た目」と「実装」の間の**振る舞いを記述する中間
 
 ## 設計思想
 
-### 1. Human-Readable First
+### 1. Human-Readable First（人間が読める）
 
 YAMLで記述し、**人間が読んで理解できる**ことを最優先にします。
 
 ```yaml
 # 良い例：意図が明確
-- when: user.isAdmin
-  show: AdminPanel
+- when: $user.isAdmin
+  then: AdminPanel
   else: UserPanel
 
 # 避ける：暗号的な省略
-- if: u.ia then: AP else: UP
+- if: u.ia then: AP
 ```
 
-### 2. AI-Parseable
+### 2. AI-Parseable（AIが解釈可能）
 
 構造が一貫しており、**AIが確実に解釈できる**ようにします。
 
-- 状態参照はプレフィックスなし（`users`, `form.valid`）
+- 状態参照は `$` プレフィックス（`$users`, `$form.valid`）
 - イベントは `on:` プレフィックス（`on:click`, `on:submit`）
 - 条件は `when:` / `match:` で統一
+- 派生状態は自然言語クエリ形式（`count: $todos where: not completed`）
 
-### 3. Framework-Agnostic
+### 3. MUIコンポーネントベース
 
-特定のフレームワークに依存しない**抽象的な記述**を使います。
+**Material-UI (MUI) のコンポーネント名とプロパティ**をベースにします。
 
 ```yaml
-# 抽象コンポーネント名
+# MUIコンポーネントを使用
 - TextField:
     label: "名前"
-    bind: $form.name
+    variant: outlined
+    value: $form.name
+    on:change: set $form.name to $value
 
-# NG: フレームワーク固有
-- MuiTextField:
-    ...
+- Button:
+    variant: contained
+    color: primary
+    label: "保存"
+    on:click: actions.save
 ```
 
-AIはButton、TextField等の抽象コンポーネント名から、指定されたフレームワーク（MUI、Chakra UI、Vuetify等）の適切な実装を推論できます。
+AIはMUIコンポーネントから、他のフレームワーク（Chakra UI、Vuetify、Flutter等）への変換も可能です。
 
-### 4. Progressive Detail
+### 4. 省略可能なフィールド
 
-概要から詳細へ**段階的に記述**できます。
+多くのフィールドは省略可能であり、必要に応じて記述できます。
 
 ```yaml
-# Level 1: 概要
+# 最小限の定義（descriptionのみでも有効）
 screens:
   UserList:
-    description: ユーザー一覧を検索・表示する
+    description: ユーザー一覧を表示
 
-# Level 2: 構造
+# 必要に応じてフィールドを追加
 screens:
   UserList:
-    layout: [SearchBar, DataTable, Pagination]
-
-# Level 3: 完全定義
-screens:
-  UserList:
-    state: {...}
-    layout: {...}
-    actions: {...}
+    description: ユーザー一覧を表示
+    route: /users
+    state:
+      users: { type: User[], source: external }
+    layout:
+      - Table:
+          data: $users
 ```
 
 ---
@@ -156,7 +186,7 @@ screens:
 ### 1. 基本構造
 
 ```yaml
-sbp: "0.3.0"
+sbp: "0.4.0"
 
 meta:
   name: My App
@@ -176,8 +206,16 @@ screens:
         type: User[]
         source: external
     layout:
-      - DataTable:
-          data: users
+      - Table:
+          children:
+            - TableBody:
+                children:
+                  - for: user in $users
+                    render:
+                      - TableRow:
+                          children:
+                            - TableCell:
+                                content: $user.name
 ```
 
 ### 2. 状態と参照
@@ -202,14 +240,25 @@ state:
       name: ""
       email: ""
 
-# 参照はプレフィックスなし
+# 派生状態（自然言語クエリ形式）
+computed:
+  activeUsers:
+    filter: $users
+    where: status equals "active"
+
+  userCount:
+    count: $users
+
+# 参照は$プレフィックス
 layout:
-  - when: loading
-    show: Spinner
-  - DataTable:
-      data: users
+  - when: $loading
+    then: CircularProgress
+    else:
+      - Table:
+          data: $users
   - TextField:
-      bind: form.values.name
+      value: $form.name
+      on:change: set $form.name to $value
 ```
 
 ### 3. アクション
@@ -218,42 +267,43 @@ layout:
 actions:
   submit:
     steps:
-      - validate: form
-      - if: not(form.valid)
+      - validate: $form
+      - if: not $form.valid
         then:
           - return
-      - do: createUser(form.values)
+      - do: createUser($form.values)
       - when: success
         then:
           - toast: success("作成しました")
           - navigate: UserList
       - when: failure
         then:
-          - toast: error(message)
+          - toast: error($message)
 ```
 
 ### 4. 条件分岐
 
 ```yaml
 layout:
-  # when-show-else
-  - when: loading
-    show: Spinner
+  # when-then-else
+  - when: $loading
+    then: CircularProgress
     else: Content
 
   # match
-  - match: status
+  - match: $status
     cases:
       active: ActiveBadge
       inactive: InactiveBadge
     default: UnknownBadge
 
   # 繰り返し
-  - each: users
-    as: user
+  - for: user in $users
     render:
-      - UserCard:
-          name: user.name
+      - Card:
+          children:
+            - Typography:
+                content: $user.name
 ```
 
 ---
@@ -263,9 +313,8 @@ layout:
 | ドキュメント | 内容 |
 |--------------|------|
 | [SPEC.md](./SPEC.md) | 完全な仕様書 |
-| [BACKGROUND.md](./docs/BACKGROUND.md) | 背景・競合調査・ポジショニング |
+| [COMPETITORS.md](./docs/COMPETITORS.md) | 競合調査 |
 | [DESIGN_DECISIONS.md](./docs/DESIGN_DECISIONS.md) | 設計判断の記録 |
-| [ROADMAP.md](./docs/ROADMAP.md) | 今後の計画 |
 
 ## サンプル
 
@@ -274,6 +323,7 @@ layout:
 | [examples/user-management/](./examples/user-management/) | CRUD画面の完全なサンプル |
 | [examples/todo-app/](./examples/todo-app/) | プロジェクト・タグ管理付きToDoアプリ |
 | [examples/slack-like-chat/](./examples/slack-like-chat/) | Slackライクなチャットアプリ |
+| [examples/dashboard/](./examples/dashboard/) | 分析ダッシュボード |
 
 ---
 

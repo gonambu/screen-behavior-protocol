@@ -1848,88 +1848,88 @@ SBPでは、プログラミング式ではなく**自然言語に近い構文**�
 
 ### 参照構文
 
-状態やプロパティへの参照は `{name}` 形式で記述する。
+状態やプロパティへの参照は `$name` 形式で記述する。
 
 ```yaml
 # === 状態参照 ===
-{stateName}                   # 現在のスコープの状態
-{screen.stateName}            # 画面の状態を明示
-{parent.stateName}            # 親コンポーネントの状態
+$stateName                    # 現在のスコープの状態
+$screen.stateName             # 画面の状態を明示
+$parent.stateName             # 親コンポーネントの状態
 
 # === パラメータ ===
-{params.id}                   # URLパラメータ
-{route.params.id}             # ルートパラメータ
+$params.id                    # URLパラメータ
+$route.params.id              # ルートパラメータ
 
 # === イベントデータ ===
-{value}                       # イベントの値（on:change等で使用）
+$value                        # イベントの値（on:change等で使用）
 
 # === 反復変数 ===
-{item}                        # each内の現在のアイテム
-{index}                       # each内の現在のインデックス
-{row}                         # DataTable行のデータ
-{row.fieldName}               # 行の特定フィールド
+$item                         # each/for内の現在のアイテム
+$index                        # each/for内の現在のインデックス
+$row                          # DataTable行のデータ
+$row.fieldName                # 行の特定フィールド
 
 # === 特殊参照 ===
-{result}                      # 直前のdoの結果
-{currentUser}                 # ログインユーザー（グローバル）
+$result                       # 直前のdoの結果
+$currentUser                  # ログインユーザー（グローバル）
 
 # === オブジェクトのフィールド ===
-{user.name}                   # ネストしたフィールド
-{user.address.city}           # 深いネスト
+$user.name                    # ネストしたフィールド
+$user.address.city            # 深いネスト
 ```
 
 ### 比較演算（使用可能な表現一覧）
 
 | 表現 | 意味 | 例 |
 |------|------|-----|
-| `{field} equals {value}` | 等しい | `name equals "John"` |
-| `{field} equals "{literal}"` | 文字列と等しい | `status equals "active"` |
-| `{field} is not {value}` | 等しくない | `role is not "guest"` |
-| `{field} is empty` | 空である | `email is empty` |
-| `{field} is not empty` | 空でない | `name is not empty` |
-| `{field} contains {value}` | 含む | `email contains "@"` |
-| `length of {field} equals {n}` | 長さが等しい | `length of code equals 6` |
-| `length of {field} is not {n}` | 長さが等しくない | `length of code is not 6` |
-| `{field} greater than {n}` | より大きい | `age greater than 18` |
-| `{field} less than {n}` | より小さい | `count less than 10` |
-| `{field} at least {n}` | 以上 | `score at least 60` |
-| `{field} at most {n}` | 以下 | `items at most 100` |
+| `$field equals $value` | 等しい | `$name equals "John"` |
+| `$field equals "literal"` | 文字列と等しい | `$status equals "active"` |
+| `$field is not $value` | 等しくない | `$role is not "guest"` |
+| `$field is empty` | 空である | `$email is empty` |
+| `$field is not empty` | 空でない | `$name is not empty` |
+| `$field contains $value` | 含む | `$email contains "@"` |
+| `length of $field equals n` | 長さが等しい | `length of $code equals 6` |
+| `length of $field is not n` | 長さが等しくない | `length of $code is not 6` |
+| `$field greater than n` | より大きい | `$age greater than 18` |
+| `$field less than n` | より小さい | `$count less than 10` |
+| `$field at least n` | 以上 | `$score at least 60` |
+| `$field at most n` | 以下 | `$items at most 100` |
 
 ### 配列操作（使用可能な表現一覧）
 
 | 表現 | 意味 | 例 |
 |------|------|-----|
-| `find in {array} where {field} equals {value}` | 条件に合う最初の要素 | `find in users where id equals {selectedId}` |
-| `filter {array} where {field} equals {value}` | 条件に合う要素の配列 | `filter users where status equals "active"` |
-| `remove from {array} where {field} equals {value}` | 条件に合う要素を除いた配列 | `remove from users where id equals {targetId}` |
-| `count of {array}` | 配列の要素数 | `count of users` |
-| `count of {array} where {condition}` | 条件に合う要素数 | `count of users where status equals "active"` |
-| `first of {array}` | 先頭要素 | `first of items` |
-| `last of {array}` | 末尾要素 | `last of items` |
+| `find in $array where field equals $value` | 条件に合う最初の要素 | `find in $users where id equals $selectedId` |
+| `filter $array where field equals $value` | 条件に合う要素の配列 | `filter $users where status equals "active"` |
+| `remove from $array where field equals $value` | 条件に合う要素を除いた配列 | `remove from $users where id equals $targetId` |
+| `count of $array` | 配列の要素数 | `count of $users` |
+| `count of $array where condition` | 条件に合う要素数 | `count of $users where status equals "active"` |
+| `first of $array` | 先頭要素 | `first of $items` |
+| `last of $array` | 末尾要素 | `last of $items` |
 
 ### 論理演算（YAML構造）
 
 ```yaml
 # AND条件（すべてがtrue）
 all of:
-  - name is not empty
-  - email is not empty
-  - email contains "@"
+  - $name is not empty
+  - $email is not empty
+  - $email contains "@"
 
 # OR条件（いずれかがtrue）
 any of:
-  - status equals "admin"
-  - status equals "owner"
+  - $status equals "admin"
+  - $status equals "owner"
 
 # NOT条件
-not: isLoading
+not: $isLoading
 
 # ネストした条件
 all of:
-  - hasSelection
+  - $hasSelection
   - any of:
-      - {currentUser.role} equals "admin"
-      - {currentUser.id} equals {selectedUserId}
+      - $currentUser.role equals "admin"
+      - $currentUser.id equals $selectedUserId
 ```
 
 ### 組み込み値
@@ -1939,17 +1939,17 @@ all of:
 | `today` | 今日の日付（YYYY-MM-DD形式） |
 | `now` | 現在時刻（ISO形式） |
 | `new id` | 新規UUID |
-| `new id with prefix "{prefix}"` | プレフィックス付きID（例: `user-xxx`） |
-| `toggle {field}` | 真偽値の反転 |
+| `new id with prefix "prefix"` | プレフィックス付きID（例: `user-xxx`） |
+| `toggle $field` | 真偽値の反転 |
 
 ### 文字列テンプレート
 
-文字列内で参照を埋め込む場合は `{name}` 形式を使用する。
+文字列内で参照を埋め込む場合は `{$name}` 形式を使用する。
 
 ```yaml
-text: "{user.name}さん、こんにちは"
-text: "合計: {count of items}件"
-text: "ステータス: {status}"
+text: "{$user.name}さん、こんにちは"
+text: "合計: {count of $items}件"
+text: "ステータス: {$status}"
 ```
 
 ### 使用例
@@ -1958,36 +1958,36 @@ text: "ステータス: {status}"
 # computed での使用
 computed:
   # 単純な参照（find）
-  user: find in users where id equals {selectedUserId}
+  user: find in $users where id equals $selectedUserId
 
   # フィルター
-  activeUsers: filter users where status equals "active"
+  activeUsers: filter $users where status equals "active"
 
   # カウント
-  activeCount: count of users where status equals "active"
+  activeCount: count of $users where status equals "active"
 
   # 複合条件
   canDelete:
     all of:
-      - selectedIds is not empty
-      - {currentUser.role} equals "admin"
+      - $selectedIds is not empty
+      - $currentUser.role equals "admin"
 
   # 空チェック
-  hasUsers: users is not empty
+  hasUsers: $users is not empty
 
   # 比較
-  isConfirmed: confirmText equals "DELETE"
+  isConfirmed: $confirmText equals "DELETE"
 
 # layout での使用
 layout:
   # 条件分岐
-  - when: loading
+  - when: $loading
     then: Spinner
 
-  - when: {activeTab} equals "list"
+  - when: $activeTab equals "list"
     then: UserListTab
 
-  - when: selectedUserId is not empty
+  - when: $selectedUserId is not empty
     then: DetailPanel
 
   # disabled条件
@@ -1995,8 +1995,8 @@ layout:
       text: 次へ
       disabled:
         any of:
-          - name is empty
-          - email is empty
+          - $name is empty
+          - $email is empty
 ```
 
 ---
@@ -2356,11 +2356,9 @@ SBPドキュメントの検証ルール。
   - 各コンポーネントで使用可能なプロパティをenumで定義
   - Button, TextField, AppBar, Drawer など主要コンポーネントの型を明記
 - **自然言語式に統一（JS式の完全廃止）**
-  - `$users.filter(u => u.status == 'active')` → `filter users where status equals "active"`
-  - `$confirmText == "DELETE"` → `confirmText equals "DELETE"`
-  - `$name.trim() != ""` → `name is not empty`
-- **参照構文の変更**
-  - `$variableName` → `{variableName}` 形式に統一
+  - `$users.filter(u => u.status == 'active')` → `filter $users where status equals "active"`
+  - `$confirmText == "DELETE"` → `$confirmText equals "DELETE"`
+  - `$name.trim() != ""` → `$name is not empty`
 - **使用可能な表現を明確に列挙**
   - 比較演算: `equals`, `is not`, `is empty`, `contains`, `greater than` など
   - 配列操作: `find in ... where`, `filter ... where`, `count of`, `remove from ... where`
@@ -2406,8 +2404,7 @@ SBPドキュメントの検証ルール。
 - **refetch削除**: データ再取得は実装の責務
 - computed をクエリ形式に変更（JavaScriptの式を廃止）
 - actions を宣言的な操作に変更
-- テンプレート構文を簡略化: `${$var}` → `{var}`
-- $プレフィックスを廃止（文脈で判断）
+- テンプレート構文を簡略化: `${$var}` → `{$var}`
 
 ### v0.2.1
 
